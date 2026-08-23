@@ -4,8 +4,8 @@ Widget météo pour l'écran d'accueil de l'iPhone, né du mélange de trois ré
 
 - **la photo du trou noir** — noir absolu, monochrome blanc, dôme sombre cerclé de
   lumière et disque d'accrétion en filaments ;
-- **!Boring Weather** — la bande des jours en bas : libellé, icône, maximum en gras,
-  minimum estompé ;
+- **!Boring Weather** — la bande des jours en bas du widget : libellé, icône,
+  maximum en gras, minimum estompé ;
 - **le site Active Theory de la vidéo** — la matière générative en mouvement, reprise
   dans la vue plein écran : 520 particules sur orbites képlériennes, traînées de
   lumière, effet de phare sur le côté qui s'approche.
@@ -35,6 +35,20 @@ Données : [Open-Meteo](https://open-meteo.com) — gratuit, sans clé API.
    - **Script** : *Météo*
    - **When Interacting** : *Run Script* ← indispensable pour la vue interactive
 
+## La frise, dans la vue plein écran
+
+C'est la barre qu'on manipule, et elle occupe tout le bas de l'écran. Elle porte,
+en plus de la courbe des températures :
+
+- les **heures de nuit ombrées**, pour les repérer d'un coup d'œil ;
+- une **coupure pointillée** à chaque changement de journée, et le nom du jour dessous ;
+- un **trait teinté heure par heure** par la couleur du temps qu'il fera ;
+- les **extrêmes de la période**, marqués et chiffrés ;
+- un **curseur à prise**, accompagné d'une bande de lumière et d'une pastille sur la courbe.
+
+La vue plein écran ne montre volontairement **pas** de prévisions par jour : elle sert
+à parcourir les heures. Le détail par jour reste en bas du widget, sur l'écran d'accueil.
+
 ## Ce qu'affiche chaque taille
 
 | Taille | Contenu |
@@ -43,13 +57,19 @@ Données : [Open-Meteo](https://open-meteo.com) — gratuit, sans clé API.
 | **Moyen** | Idem + bande de 6 jours en bas |
 | **Grand** | Idem + ressenti, humidité, vent, courbe des 24 h, bande de 8 jours |
 
-## Choisir une ville fixe
+## La ville
 
-Par défaut le widget suit le GPS. Pour l'épingler :
+Le widget est réglé sur **Avignon (84000)**, via `villeFixe` en haut du fichier.
+Trois niveaux, du plus fort au plus faible :
 
-> Appui long sur le widget → *Modifier le widget* → champ **Paramètre** → `Lyon`
+1. le **paramètre du widget** — appui long → *Modifier le widget* → champ **Paramètre**.
+   Il ne vaut que pour ce widget-là, pratique pour en poser deux côte à côte ;
+2. **`villeFixe`** dans `CONFIG` — la ville imposée à tous les widgets.
+   Mets `""` pour revenir au GPS ;
+3. le **GPS**, puis `villeParDefaut` si la position est refusée.
 
-Pratique pour poser deux widgets côte à côte, un en GPS et un sur une autre ville.
+Le géocodage se fait par **nom de ville**, pas par code postal : écris `Avignon`
+plutôt que `84000`. Pour lever une ambiguïté, précise : `Saint-Denis, Réunion`.
 
 ## Réglages
 

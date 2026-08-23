@@ -15,7 +15,8 @@
 
 const CONFIG = {
   unites: "metrique",       // "metrique" (°C, km/h) ou "imperial" (°F, mph)
-  villeParDefaut: "Paris",  // repli si le GPS est indisponible
+  villeFixe: "Avignon",     // ville imposée (84000). Vide "" = suivre le GPS
+  villeParDefaut: "Avignon",// repli si le GPS est indisponible
   minutesAvantRafraichissement: 30,
   joursAffiches: 8,         // colonnes de la bande des jours (widget grand)
   heuresGraphe: 24,         // portée du graphe horaire du widget
@@ -106,9 +107,16 @@ async function geocoder(nomVille) {
 }
 
 async function resoudreLieu() {
+  // Le paramètre du widget vise ce widget-là : il passe avant tout le reste.
   const parametre = (args.widgetParameter || "").trim()
   if (parametre) {
     const lieu = await geocoder(parametre)
+    if (lieu) return lieu
+  }
+
+  const imposee = (CONFIG.villeFixe || "").trim()
+  if (imposee) {
+    const lieu = await geocoder(imposee)
     if (lieu) return lieu
   }
 
@@ -760,9 +768,6 @@ async function vueInteractive(d) {
     heures: d.heures.map(h => ({
       h: h.heure, j: h.jour, t: h.temp, l: h.libelle.toUpperCase(),
       f: h.famille, d: h.estJour, dt: h.dateISO
-    })),
-    jours: d.jours.map(j => ({
-      n: j.nom, f: j.famille, x: j.max, m: j.min, dt: j.dateISO
     }))
   })
 
@@ -813,9 +818,9 @@ html, body { height:100%; background:#000; overflow:hidden;
 
 /* Pendant le glissement, la lecture grossit et le reste s'efface. */
 #page.scrute #lecture { transform:scale(1.08); }
-#page.scrute #jours { opacity:.18; }
+#page.scrute #reperes { opacity:.3; }
 #page.scrute #aide { opacity:0; }
-#jours, #aide { transition:opacity .22s ease; }
+#aide { transition:opacity .22s ease; }
 
 /* Les chiffres défilent comme un compteur, dans le sens du glissement. */
 @keyframes monte {
@@ -839,29 +844,44 @@ html, body { height:100%; background:#000; overflow:hidden;
   #temp { font-size:38px; }
 }
 
-/* Bande des jours, comme en bas du widget. */
-#jours { display:flex; justify-content:space-between; gap:2px; margin-top:auto; padding-top:16px;
-  border-top:1px solid rgba(255,255,255,.12); }
-.jour { flex:1; display:flex; flex-direction:column; align-items:center; gap:5px;
-  opacity:.4; transition:opacity .18s ease; }
-.jour.actif { opacity:1; }
-.jour .nom { font-size:9px; letter-spacing:.06em; }
-.jour svg { width:19px; height:19px; }
-.jour .max { font-size:12px; font-weight:700; }
-.jour .min { font-size:12px; opacity:.5; }
-
-/* Frise de défilement, dans la zone du pouce. */
-#frise { position:relative; margin-top:22px; height:300px; touch-action:none; }
-#frise::before { content:""; position:absolute; inset:-14px -24px -18px -24px; pointer-events:none;
-  background:linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,.18) 60%, rgba(0,0,0,0)); }
+/* La frise : c'est elle qu'on manipule, elle occupe donc tout le bas. */
+#frise { position:relative; margin-top:auto; height:380px; touch-action:none; }
+#frise::before { content:""; position:absolute; inset:-16px -24px -20px -24px; pointer-events:none;
+  background:linear-gradient(to top, rgba(0,0,0,.62), rgba(0,0,0,.20) 62%, rgba(0,0,0,0)); }
 #courbe { position:absolute; inset:0; width:100%; height:100%; }
-#curseur { position:absolute; top:0; bottom:34px; width:1px; background:rgba(255,255,255,.75);
-  transform:translateX(-.5px); box-shadow:0 0 12px rgba(255,255,255,.5); }
-#pastille { position:absolute; width:11px; height:11px; margin:-5.5px 0 0 -5.5px; border-radius:50%;
-  background:#fff; box-shadow:0 0 18px rgba(255,255,255,.95); }
-#heures { position:absolute; left:0; right:0; bottom:0; height:28px; display:flex;
-  justify-content:space-between; font-size:10px; letter-spacing:.1em; opacity:.4; }
-#aide { text-align:center; font-size:10px; letter-spacing:.18em; opacity:.3; margin-top:4px; }
+
+/* Repères en HTML : dans un SVG étiré en largeur, textes et pastilles
+   seraient écrasés. Le pourcentage les cale exactement sur la courbe. */
+#reperes { position:absolute; inset:0; pointer-events:none; transition:opacity .22s ease; }
+#reperes span, #reperes i { position:absolute; transform:translateX(-50%); white-space:nowrap; }
+#reperes .hr { bottom:26px; font-size:10px; letter-spacing:.1em; opacity:.42;
+  font-variant-numeric:tabular-nums; }
+#reperes .hr.gauche { transform:translateX(0); }
+#reperes .hr.droite { transform:translateX(-100%); }
+#reperes .jr { bottom:4px; font-size:9px; letter-spacing:.2em; opacity:.66;
+  transform:translateX(0); padding-left:6px; }
+#reperes .pt { width:5px; height:5px; margin:-2.5px 0 0 -2.5px; border-radius:50%;
+  background:#fff; opacity:.8; transform:none; }
+#reperes .ex { font-size:10px; font-weight:600; letter-spacing:.05em;
+  font-variant-numeric:tabular-nums; }
+#reperes .ex.haut { margin-top:-21px; opacity:.92; }
+#reperes .ex.bas { margin-top:9px; opacity:.5; }
+
+/* Le curseur : un rail, une lueur qui l'accompagne, une prise sur la courbe. */
+#bande { position:absolute; top:0; bottom:44px; width:64px; margin-left:-32px; pointer-events:none;
+  background:linear-gradient(to right, rgba(255,255,255,0), rgba(255,255,255,.085) 50%,
+  rgba(255,255,255,0)); }
+#curseur { position:absolute; top:0; bottom:44px; width:1px; background:rgba(255,255,255,.8);
+  transform:translateX(-.5px); box-shadow:0 0 14px rgba(255,255,255,.55); }
+#curseur::before, #curseur::after {
+  content:""; position:absolute; left:-2.5px; width:6px; height:6px; border-radius:50%;
+  background:rgba(255,255,255,.85);
+}
+#curseur::before { top:-3px; }
+#curseur::after { bottom:-3px; }
+#pastille { position:absolute; width:13px; height:13px; margin:-6.5px 0 0 -6.5px; border-radius:50%;
+  background:#fff; box-shadow:0 0 0 4px rgba(255,255,255,.16), 0 0 22px rgba(255,255,255,.95); }
+#aide { text-align:center; font-size:10px; letter-spacing:.18em; opacity:.3; margin-top:6px; }
 `
 
 const CORPS_INTERACTIF = `
@@ -877,12 +897,12 @@ const CORPS_INTERACTIF = `
       <div id="etat"></div>
     </div>
   </div>
-  <div id="jours"></div>
   <div id="frise">
     <svg id="courbe" preserveAspectRatio="none"></svg>
+    <div id="reperes"></div>
+    <div id="bande"></div>
     <div id="curseur"></div>
     <div id="pastille"></div>
-    <div id="heures"></div>
   </div>
   <div id="aide">GLISSER POUR PARCOURIR LES HEURES</div>
 </div>
@@ -1321,64 +1341,58 @@ const elTemp = document.getElementById("temp");
 const elQuand = document.getElementById("quand");
 const elEtat = document.getElementById("etat");
 const elVille = document.getElementById("ville");
-const elJours = document.getElementById("jours");
 const elFrise = document.getElementById("frise");
 const elCourbe = document.getElementById("courbe");
+const elReperes = document.getElementById("reperes");
+const elBande = document.getElementById("bande");
 const elCurseur = document.getElementById("curseur");
 const elPastille = document.getElementById("pastille");
-const elHeures = document.getElementById("heures");
 
 elVille.textContent = DONNEES.ville;
 const FOND = demarrerFond();
 
-// ── Glyphes météo, en blanc plein ──
-function glyphe(famille, estJour) {
-  const nuage = '<circle cx="24" cy="34" r="10"/><circle cx="39" cy="31" r="13"/>'
-              + '<rect x="24" y="34" width="21" height="10" rx="5"/>';
-  if (famille === "clair") {
-    return estJour
-      ? '<circle cx="32" cy="30" r="15"/>'
-      : '<path d="M40 12a19 19 0 1 0 12 30A20 20 0 0 1 40 12z"/>';
-  }
-  if (famille === "voile") return '<circle cx="42" cy="22" r="10" opacity=".75"/>' + nuage;
-  if (famille === "nuage") return nuage;
-  if (famille === "brume") {
-    return '<g fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round">'
-      + '<path d="M8 22q6-5 12 0t12 0 12 0 12 0"/>'
-      + '<path d="M8 33q6-5 12 0t12 0 12 0 12 0" opacity=".72"/>'
-      + '<path d="M8 44q6-5 12 0t12 0 12 0 12 0" opacity=".48"/></g>';
-  }
-  if (famille === "pluie") return nuage
-    + '<rect x="23" y="48" width="2.5" height="9" rx="1.25" opacity=".8"/>'
-    + '<rect x="32" y="50" width="2.5" height="9" rx="1.25" opacity=".8"/>'
-    + '<rect x="41" y="48" width="2.5" height="9" rx="1.25" opacity=".8"/>';
-  if (famille === "neige") return nuage
-    + '<circle cx="24" cy="52" r="2.4" opacity=".8"/><circle cx="33" cy="55" r="2.4" opacity=".8"/>'
-    + '<circle cx="42" cy="52" r="2.4" opacity=".8"/>';
-  return nuage + '<path d="M34 47l-8 9h6l-3 8 10-11h-6z"/>';
-}
-
-// ── Bande des jours ──
-let bande = "";
-DONNEES.jours.forEach(function (j) {
-  bande += '<div class="jour" data-jour="' + j.dt + '">'
-    + '<div class="nom">' + j.n + '</div>'
-    + '<svg viewBox="0 0 64 64" fill="#fff">' + glyphe(j.f, true) + '</svg>'
-    + '<div class="max">' + Math.round(j.x) + '°</div>'
-    + '<div class="min">' + Math.round(j.m) + '°</div></div>';
-});
-elJours.innerHTML = bande;
-const colonnes = elJours.children;
-
-// ── Courbe des 48 prochaines heures ──
-const L = 1000, HT = 300, BAS = 34, HAUT = 26;   // HT = hauteur CSS de #frise
+// ── Frise des 48 prochaines heures ──
+const L = 1000, HT = 380, BAS = 48, HAUT = 30;   // HT = hauteur CSS de #frise
 const temps = H.map(function (x) { return x.t; });
 const tMin = Math.min.apply(null, temps), tMax = Math.max.apply(null, temps);
 const etendue = (tMax - tMin) || 1;
 const px = function (i) { return (i / (H.length - 1)) * L; };
+const pc = function (i) { return (i / (H.length - 1)) * 100; };
 const py = function (t) { return HAUT + (HT - BAS - HAUT) * (1 - (t - tMin) / etendue); };
 
+// La couleur du temps, ramenée vers le blanc pour rester lisible sur le noir.
+function tonHeure(x) {
+  const clef = (x.f === "clair" && !x.d) ? "clairNuit" : x.f;
+  const c = (TEMPS[clef] || TEMPS.nuage).c;
+  return "rgb(" + Math.round(255 - (255 - c[0]) * 0.62)
+       + "," + Math.round(255 - (255 - c[1]) * 0.62)
+       + "," + Math.round(255 - (255 - c[2]) * 0.62) + ")";
+}
+
 elCourbe.setAttribute("viewBox", "0 0 " + L + " " + HT);
+
+// Les heures sans soleil sont assombries : on lit les nuits d'un coup d'œil.
+let nuits = "", debutNuit = -1;
+for (let i = 0; i <= H.length; i++) {
+  const estNuit = i < H.length && !H[i].d;
+  if (estNuit && debutNuit < 0) debutNuit = i;
+  if (!estNuit && debutNuit >= 0) {
+    nuits += '<rect x="' + px(debutNuit).toFixed(1) + '" y="0" width="'
+      + (px(i) - px(debutNuit)).toFixed(1) + '" height="' + (HT - BAS)
+      + '" fill="#9dc0ff" opacity=".06"/>';
+    debutNuit = -1;
+  }
+}
+
+// Une coupure verticale à chaque changement de journée.
+let coupures = "";
+for (let i = 1; i < H.length; i++) {
+  if (H[i].dt !== H[i - 1].dt) {
+    coupures += '<line x1="' + px(i).toFixed(1) + '" y1="0" x2="' + px(i).toFixed(1)
+      + '" y2="' + (HT - BAS + 12) + '" stroke="#fff" stroke-opacity=".2" stroke-width="1"'
+      + ' stroke-dasharray="2 6" vector-effect="non-scaling-stroke"/>';
+  }
+}
 
 let ligne = "", aire = "M0," + (HT - BAS);
 H.forEach(function (x, i) {
@@ -1388,17 +1402,49 @@ H.forEach(function (x, i) {
 });
 aire += "L" + L + "," + (HT - BAS) + "Z";
 
-elCourbe.innerHTML =
-    '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">'
-  + '<stop offset="0" stop-color="#fff" stop-opacity=".24"/>'
-  + '<stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>'
-  + '<path d="' + aire + '" fill="url(#g)"/>'
-  + '<path d="' + ligne + '" fill="none" stroke="#fff" stroke-opacity=".9" stroke-width="2"'
-  + ' vector-effect="non-scaling-stroke" stroke-linejoin="round"/>';
+// Le trait prend la couleur du temps, heure par heure.
+let teintes = "";
+H.forEach(function (x, i) {
+  teintes += '<stop offset="' + pc(i).toFixed(2) + '%" stop-color="' + tonHeure(x) + '"/>';
+});
 
-let reperes = "";
-for (let i = 0; i < H.length; i += 6) reperes += "<span>" + H[i].h + "</span>";
-elHeures.innerHTML = reperes;
+elCourbe.innerHTML =
+    '<defs>'
+  + '<linearGradient id="aire" x1="0" y1="0" x2="0" y2="1">'
+  + '<stop offset="0" stop-color="#fff" stop-opacity=".22"/>'
+  + '<stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>'
+  + '<linearGradient id="trait" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="' + L + '" y2="0">'
+  + teintes + '</linearGradient></defs>'
+  + nuits + coupures
+  + '<path d="' + aire + '" fill="url(#aire)"/>'
+  + '<path d="' + ligne + '" fill="none" stroke="url(#trait)" stroke-width="2.4"'
+  + ' vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>';
+
+// Repères en HTML : le SVG est étiré en largeur, textes et pastilles y
+// seraient écrasés. Le pourcentage les cale exactement sur la courbe.
+let marques = "";
+for (let i = 0; i < H.length; i += 6) {
+  const bord = i === 0 ? " gauche" : (i > H.length - 4 ? " droite" : "");
+  marques += '<span class="hr' + bord + '" style="left:' + pc(i).toFixed(2) + '%">'
+    + H[i].h + '</span>';
+}
+let jourCourant = null;
+H.forEach(function (x, i) {
+  if (x.dt === jourCourant) return;
+  jourCourant = x.dt;
+  marques += '<span class="jr" style="left:' + pc(i).toFixed(2) + '%">'
+    + (i === 0 ? "AUJ." : x.j) + '</span>';
+});
+// L'étiquette d'un extrême se pose du côté où il reste de la place : sinon
+// celle du minimum vient s'écraser sur la rangée des heures.
+const iMax = temps.indexOf(tMax), iMin = temps.indexOf(tMin);
+[[iMax, tMax, py(tMax) < 24 ? "bas" : "haut"],
+ [iMin, tMin, py(tMin) > HT - BAS - 28 ? "haut" : "bas"]].forEach(function (e) {
+  const g = "left:" + pc(e[0]).toFixed(2) + "%;top:" + (py(e[1]) / HT * 100).toFixed(2) + "%";
+  marques += '<i class="pt" style="' + g + '"></i>'
+    + '<span class="ex ' + e[2] + '" style="' + g + '">' + Math.round(e[1]) + '°</span>';
+});
+elReperes.innerHTML = marques;
 
 // ── Affichage d'une heure ──
 let indexActuel = -1;
@@ -1427,13 +1473,11 @@ function afficher(i) {
     relancer(elTemp, arriere);
   }
 
-  for (let k = 0; k < colonnes.length; k++) {
-    colonnes[k].className = colonnes[k].dataset.jour === x.dt ? "jour actif" : "jour";
-  }
-
   const r = elFrise.getBoundingClientRect();
-  elCurseur.style.left = (px(i) / L) * r.width + "px";
-  elPastille.style.left = (px(i) / L) * r.width + "px";
+  const gx = (px(i) / L) * r.width;
+  elCurseur.style.left = gx + "px";
+  elBande.style.left = gx + "px";
+  elPastille.style.left = gx + "px";
   elPastille.style.top = (py(x.t) / HT) * r.height + "px";
 }
 
