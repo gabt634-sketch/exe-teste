@@ -234,23 +234,52 @@ function alea(graine) {
   }
 }
 
-// Mêmes sept ambiances que le disque animé de la vue interactive.
+// Mêmes sept temps que la vue interactive : même couleur, même objet dans
+// le ciel, même chose qui tombe — en version fixe.
 const FONDS = {
-  clair: { grains: 175, eclat: 1.00, longueur: 1.00, trait: 1.00, anneau: 0.62, halo: 1.00 },
-  voile: { grains: 155, eclat: 0.84, longueur: 0.88, trait: 1.25, anneau: 0.50, halo: 0.90 },
-  nuage: { grains: 120, eclat: 0.64, longueur: 0.70, trait: 1.65, anneau: 0.38, halo: 0.75 },
-  brume: { grains: 105, eclat: 0.50, longueur: 0.40, trait: 2.70, anneau: 0.26, halo: 1.15 },
-  pluie: { grains: 150, eclat: 0.70, longueur: 1.18, trait: 1.05, anneau: 0.42, halo: 0.70 },
-  neige: { grains: 175, eclat: 0.78, longueur: 0.46, trait: 1.75, anneau: 0.44, halo: 0.95 },
-  orage: { grains: 165, eclat: 1.00, longueur: 1.40, trait: 0.90, anneau: 0.72, halo: 0.85 }
+  clair:     { grains:175, eclat:1.00, longueur:1.00, trait:1.00, anneau:0.62, halo:1.00,
+               c:[255,198,84],  h:[255,140,30],  ciel:"soleil", chute:null },
+  clairNuit: { grains:170, eclat:0.80, longueur:1.00, trait:1.00, anneau:0.58, halo:0.95,
+               c:[206,225,255], h:[132,172,255], ciel:"lune",   chute:null },
+  voile:     { grains:155, eclat:0.84, longueur:0.88, trait:1.25, anneau:0.50, halo:0.90,
+               c:[255,213,128], h:[150,164,178], ciel:"soleil", chute:null },
+  nuage:     { grains:120, eclat:0.64, longueur:0.70, trait:1.65, anneau:0.38, halo:0.75,
+               c:[156,168,180], h:[104,116,129], ciel:"nuage",  chute:null },
+  brume:     { grains:105, eclat:0.50, longueur:0.40, trait:2.70, anneau:0.26, halo:1.15,
+               c:[178,194,206], h:[124,140,152], ciel:null,     chute:"brume" },
+  pluie:     { grains:150, eclat:0.70, longueur:1.18, trait:1.05, anneau:0.42, halo:0.70,
+               c:[86,172,255],  h:[28,108,206],  ciel:"nuage",  chute:"pluie" },
+  neige:     { grains:175, eclat:0.78, longueur:0.46, trait:1.75, anneau:0.44, halo:0.95,
+               c:[224,244,255], h:[158,212,240], ciel:"nuage",  chute:"neige" },
+  orage:     { grains:165, eclat:1.00, longueur:1.40, trait:0.90, anneau:0.72, halo:0.85,
+               c:[182,126,255], h:[108,42,216],  ciel:"orage",  chute:"pluie" }
 }
 
-const GRAINES = { clair: 11, voile: 23, nuage: 37, brume: 51, pluie: 67, neige: 83, orage: 97 }
+const GRAINES = { clair: 11, clairNuit: 17, voile: 23, nuage: 37, brume: 51,
+                  pluie: 67, neige: 83, orage: 97 }
+
+function melange(a, b, t) {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
+}
+
+function versHex(c) {
+  const d = v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")
+  return "#" + d(c[0]) + d(c[1]) + d(c[2])
+}
 
 function fondTrouNoir(largeur, hauteur, famille, estJour) {
-  const f = FONDS[famille] || FONDS.nuage
+  const clef = (famille === "clair" && estJour === false) ? "clairNuit"
+    : (FONDS[famille] ? famille : "nuage")
+  const f = FONDS[clef]
   const nuit = estJour === false
   const gain = f.eclat * (nuit ? 0.58 : 1)
+
+  // Le disque reste blanc, juste teinté par le temps qu'il fait ; ce qui
+  // tombe du ciel, lui, garde sa couleur franche.
+  const teinteDisque = versHex(melange([255, 255, 255], f.c, 0.32))
+  const teinteChute = versHex(melange(f.c, [255, 255, 255], 0.15))
+  const teinteCiel = versHex(melange(f.c, [255, 255, 255], 0.45))
+  const teinteOmbre = versHex(f.h)
 
   const dc = new DrawContext()
   dc.size = new Size(largeur, hauteur)
@@ -263,18 +292,47 @@ function fondTrouNoir(largeur, hauteur, famille, estJour) {
   const cx = largeur / 2
   const cy = hauteur * 1.03            // horizon juste sous le cadre
   const rayon = largeur * 0.22
-  const suivant = alea(20260823 + (GRAINES[famille] || 37) * 7919)
+  const suivant = alea(20260823 + GRAINES[clef] * 7919)
 
-  // Halo : la lumière que le disque projette dans le vide. Le brouillard
-  // l'étale, la pluie le retient.
+  // ── L'objet du ciel, posé au-dessus du trou noir ──
+  // Faute de dégradés dans DrawContext, le halo est fait d'anneaux successifs.
+  if (f.ciel) {
+    const sx = largeur * 0.80
+    const sy = hauteur * 0.19
+    const sr = largeur * 0.058
+    for (let i = 14; i >= 1; i--) {
+      const rr = sr * (1 + i * 0.20)
+      dc.setFillColor(new Color(teinteOmbre, 0.020 * gain))
+      dc.fillEllipse(new Rect(sx - rr, sy - rr, rr * 2, rr * 2))
+    }
+    if (f.ciel === "soleil" || f.ciel === "lune") {
+      dc.setFillColor(new Color(teinteCiel, 0.85 * gain))
+      dc.fillEllipse(new Rect(sx - sr, sy - sr, sr * 2, sr * 2))
+      if (f.ciel === "lune") {           // on recreuse le croissant en noir
+        dc.setFillColor(new Color("#000000"))
+        dc.fillEllipse(new Rect(sx - sr * 0.5, sy - sr * 1.28, sr * 1.84, sr * 1.84))
+      }
+    } else {
+      const bulles = [[-1.10, 0.28, 0.58], [-0.55, 0.00, 0.88], [0.05, -0.20, 1.02],
+                      [0.72, 0.06, 0.84], [1.35, 0.30, 0.56]]
+      dc.setFillColor(new Color(versHex(melange(f.h, [255, 255, 255], 0.22)), 0.62 * gain))
+      for (let i = 0; i < bulles.length; i++) {
+        const br = sr * bulles[i][2]
+        dc.fillEllipse(new Rect(sx + bulles[i][0] * sr - br, sy + bulles[i][1] * sr - br,
+                                br * 2, br * 2))
+      }
+    }
+  }
+
+  // ── Halo du disque ──
   for (let i = 16; i >= 1; i--) {
     const rx = rayon * (0.9 + i * 0.46) * f.halo
     const ry = rayon * (0.12 + i * 0.075) * f.halo
-    dc.setFillColor(new Color(BLANC, 0.013 * gain))
+    dc.setFillColor(new Color(teinteDisque, 0.013 * gain))
     dc.fillEllipse(new Rect(cx - rx, cy - ry, rx * 2, ry * 2))
   }
 
-  // Traînées du disque. Le côté qui s'approche brille davantage.
+  // ── Traînées du disque : le côté qui s'approche brille davantage ──
   for (let n = 0; n < f.grains; n++) {
     const r = rayon * (1.05 + Math.pow(suivant(), 0.55) * 2.9)
     const aplat = 0.14 + suivant() * 0.09
@@ -293,51 +351,68 @@ function fondTrouNoir(largeur, hauteur, famille, estJour) {
       const p = new Point(cx + Math.cos(a) * r, cy + Math.sin(a) * r * aplat)
       if (k === 0) chemin.move(p); else chemin.addLine(p)
     }
-    dc.setStrokeColor(new Color(BLANC, Math.min(eclat * 0.32, 0.5)))
+    dc.setStrokeColor(new Color(teinteDisque, Math.min(eclat * 0.32, 0.5)))
     dc.setLineWidth((0.5 + suivant() * 1.4) * f.trait)
     dc.addPath(chemin)
     dc.strokePath()
   }
 
-  // Signature propre à chaque temps, posée sur le disque.
-  if (famille === "pluie") {
-    for (let n = 0; n < 46; n++) {
-      const x = suivant() * largeur
-      const y = hauteur - suivant() * rayon * 1.5
-      const h = 5 + suivant() * 13
-      const trait = new Path()
-      trait.move(new Point(x, y))
-      trait.addLine(new Point(x - 1.5, y + h))
-      dc.setStrokeColor(new Color(BLANC, 0.10 + suivant() * 0.16))
-      dc.setLineWidth(0.9)
-      dc.addPath(trait)
-      dc.strokePath()
+  // ── Ce qui tombe, incurvé vers le trou noir ──
+  // La direction de chaque marque mêle la verticale et la ligne qui vise
+  // l'horizon, d'autant plus que la marque en est proche.
+  if (f.chute) {
+    const combien = f.chute === "brume" ? 26 : 52
+    for (let n = 0; n < combien; n++) {
+      const x = (suivant() * 1.3 - 0.15) * largeur
+      const y = suivant() * (cy - rayon * 0.5)
+      const dx = cx - x, dy = cy - y
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1
+      const prise = Math.max(0, Math.min(1, 1 - (dist - rayon) / (rayon * 3)))
+      const proche = 0.25 + 0.55 * prise
+
+      if (f.chute === "neige") {
+        const d = (1.4 + suivant() * 2.2)
+        dc.setFillColor(new Color(teinteChute, proche * gain))
+        dc.fillEllipse(new Rect(x, y, d, d))
+      } else if (f.chute === "brume") {
+        const l = largeur * (0.10 + suivant() * 0.16)
+        dc.setFillColor(new Color(teinteChute, 0.05 * gain))
+        dc.fillEllipse(new Rect(x - l / 2, y - 3, l, 6))
+      } else {
+        const lg = 6 + suivant() * 14
+        // 0 = tout droit, 1 = droit sur l'horizon
+        const vx = (dx / dist) * prise
+        const vy = 1 + (dy / dist) * prise
+        const norme = Math.sqrt(vx * vx + vy * vy) || 1
+        const trait = new Path()
+        trait.move(new Point(x, y))
+        trait.addLine(new Point(x + (vx / norme) * lg, y + (vy / norme) * lg))
+        dc.setStrokeColor(new Color(teinteChute, proche * gain))
+        dc.setLineWidth(0.9)
+        dc.addPath(trait)
+        dc.strokePath()
+      }
     }
-  } else if (famille === "neige") {
-    for (let n = 0; n < 40; n++) {
-      const x = suivant() * largeur
-      const y = hauteur - suivant() * rayon * 2
-      const d = 1 + suivant() * 2
-      dc.setFillColor(new Color(BLANC, 0.14 + suivant() * 0.22))
-      dc.fillEllipse(new Rect(x, y, d, d))
-    }
-  } else if (famille === "orage") {
+  }
+
+  // ── L'éclair de l'orage, jusque dans le disque ──
+  if (clef === "orage") {
     const base = cx + (suivant() - 0.5) * largeur * 0.5
     const eclair = new Path()
-    let x = base, y = cy - rayon * 1.5
+    let x = base, y = cy - rayon * 1.6
     eclair.move(new Point(x, y))
     for (let k = 0; k < 4; k++) {
       x += (suivant() - 0.5) * largeur * 0.16
-      y += rayon * 0.38
+      y += rayon * 0.40
       eclair.addLine(new Point(x, y))
     }
-    dc.setStrokeColor(new Color(BLANC, 0.5))
-    dc.setLineWidth(1.4)
+    dc.setStrokeColor(new Color(teinteChute, 0.6))
+    dc.setLineWidth(1.5)
     dc.addPath(eclair)
     dc.strokePath()
   }
 
-  // Horizon des événements, cerclé de lumière sur son arc supérieur.
+  // ── Horizon des événements, cerclé de lumière sur son arc supérieur ──
   dc.setFillColor(new Color("#000000"))
   dc.fillEllipse(new Rect(cx - rayon, cy - rayon, rayon * 2, rayon * 2))
   const arc = new Path()
@@ -347,7 +422,7 @@ function fondTrouNoir(largeur, hauteur, famille, estJour) {
     const p = new Point(cx + Math.cos(a) * rayon * 1.02, cy + Math.sin(a) * rayon * 1.02)
     if (k === 0) arc.move(p); else arc.addLine(p)
   }
-  dc.setStrokeColor(new Color(BLANC, f.anneau * gain))
+  dc.setStrokeColor(new Color(teinteDisque, f.anneau * gain))
   dc.setLineWidth(1.3)
   dc.addPath(arc)
   dc.strokePath()
@@ -665,19 +740,22 @@ const CSS_INTERACTIF = `
 html, body { height:100%; background:#000; overflow:hidden;
   font-family:ui-monospace,"SF Mono",Menlo,monospace; color:#fff; }
 
-/* Le disque d'accrétion, animé, sous tout le reste. */
+/* Le disque garde ses traînées : sa toile est assombrie, jamais effacée.
+   Le ciel et ce qui en tombe vivent sur une toile réeffacée à chaque
+   image, sinon leur lumière s'accumulerait jusqu'au blanc. */
 #fond { position:fixed; inset:0; z-index:0; display:block; }
-#grain { position:fixed; inset:0; z-index:2; pointer-events:none; opacity:.045;
+#ciel { position:fixed; inset:0; z-index:1; display:block; pointer-events:none; }
+#grain { position:fixed; inset:0; z-index:3; pointer-events:none; opacity:.045;
   background:repeating-linear-gradient(0deg, rgba(255,255,255,.7) 0 1px, transparent 1px 3px); }
 
-#page { position:relative; z-index:1; height:100%; display:flex; flex-direction:column;
+#page { position:relative; z-index:2; height:100%; display:flex; flex-direction:column;
   padding:calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 16px); }
 #ville { font-size:12px; letter-spacing:.22em; opacity:.55; }
 
 /* Le bloc de lecture : l'heure en titre, la température juste dessous. */
 #lecture { margin-top:20px; transform-origin:left top; transition:transform .22s ease; }
 #quand { font-size:11px; letter-spacing:.2em; opacity:.55; height:14px; }
-#heure { font-family:-apple-system,system-ui,sans-serif; font-weight:900; font-size:116px;
+#heure { font-family:-apple-system,system-ui,sans-serif; font-weight:900; font-size:104px;
   line-height:.9; letter-spacing:-.055em; font-variant-numeric:tabular-nums;
   text-shadow:0 0 42px rgba(255,255,255,.34); }
 #bas { display:flex; align-items:baseline; gap:14px; margin-top:10px; }
@@ -685,8 +763,6 @@ html, body { height:100%; background:#000; overflow:hidden;
   line-height:1; letter-spacing:-.035em; font-variant-numeric:tabular-nums;
   text-shadow:0 0 26px rgba(255,255,255,.26); }
 #etat { font-size:11px; letter-spacing:.2em; opacity:.62; }
-#glyphe { position:absolute; top:calc(env(safe-area-inset-top) + 92px); right:24px;
-  width:78px; height:78px; opacity:.92; filter:drop-shadow(0 0 20px rgba(255,255,255,.35)); }
 
 /* Pendant le glissement, la lecture grossit et le reste s'efface. */
 #page.scrute #lecture { transform:scale(1.08); }
@@ -714,7 +790,6 @@ html, body { height:100%; background:#000; overflow:hidden;
 @media (max-height:720px) {
   #heure { font-size:88px; }
   #temp { font-size:38px; }
-  #glyphe { width:62px; height:62px; }
 }
 
 /* Bande des jours, comme en bas du widget. */
@@ -744,9 +819,9 @@ html, body { height:100%; background:#000; overflow:hidden;
 
 const CORPS_INTERACTIF = `
 <canvas id="fond"></canvas>
+<canvas id="ciel"></canvas>
 <div id="page">
   <div id="ville"></div>
-  <svg id="glyphe" viewBox="0 0 64 64"></svg>
   <div id="lecture">
     <div id="quand"></div>
     <div id="heure">--</div>
@@ -767,91 +842,269 @@ const CORPS_INTERACTIF = `
 <div id="grain"></div>
 `
 
-// Disque d'accrétion animé : la matière tourne, la météo la sculpte.
+// Disque d'accrétion animé, et la météo qui lui tombe dessus.
 const JS_FOND = `
-const AMBIANCES = {
-  clair: { vitesse:1.30, densite:1.00, eclat:1.00, fondu:0.055, epaisseur:0.9 },
-  voile: { vitesse:1.05, densite:0.92, eclat:0.86, fondu:0.062, epaisseur:1.2 },
-  nuage: { vitesse:0.80, densite:0.78, eclat:0.70, fondu:0.078, epaisseur:1.7 },
-  brume: { vitesse:0.50, densite:0.64, eclat:0.56, fondu:0.085, epaisseur:2.6 },
-  pluie: { vitesse:1.10, densite:1.00, eclat:0.74, fondu:0.052, epaisseur:1.0 },
-  neige: { vitesse:0.46, densite:1.00, eclat:0.82, fondu:0.088, epaisseur:1.8 },
-  orage: { vitesse:1.70, densite:1.00, eclat:1.00, fondu:0.045, epaisseur:0.8 }
+const TAU = Math.PI * 2;
+
+// Chaque temps a sa couleur, son objet dans le ciel, et ce qui en tombe.
+const TEMPS = {
+  clair:     { c:[255,198,84],  h:[255,140,30],  ciel:"soleil",      chute:null,
+               vitesse:1.30, densite:1.00, eclat:1.00, fondu:0.055, epaisseur:0.9 },
+  clairNuit: { c:[206,225,255], h:[132,172,255], ciel:"lune",        chute:null,
+               vitesse:1.20, densite:0.95, eclat:0.78, fondu:0.055, epaisseur:0.9 },
+  voile:     { c:[255,213,128], h:[150,164,178], ciel:"soleilVoile", chute:null,
+               vitesse:1.05, densite:0.92, eclat:0.86, fondu:0.062, epaisseur:1.2 },
+  nuage:     { c:[156,168,180], h:[104,116,129], ciel:"nuage",       chute:null,
+               vitesse:0.80, densite:0.78, eclat:0.70, fondu:0.078, epaisseur:1.7 },
+  brume:     { c:[178,194,206], h:[124,140,152], ciel:null,          chute:"brume",
+               vitesse:0.50, densite:0.64, eclat:0.56, fondu:0.085, epaisseur:2.6 },
+  pluie:     { c:[86,172,255],  h:[28,108,206],  ciel:"nuage",       chute:"pluie",
+               vitesse:1.10, densite:1.00, eclat:0.74, fondu:0.052, epaisseur:1.0 },
+  neige:     { c:[224,244,255], h:[158,212,240], ciel:"nuage",       chute:"neige",
+               vitesse:0.46, densite:1.00, eclat:0.82, fondu:0.088, epaisseur:1.8 },
+  orage:     { c:[182,126,255], h:[108,42,216],  ciel:"orage",       chute:"pluie",
+               vitesse:1.70, densite:1.00, eclat:1.00, fondu:0.045, epaisseur:0.8 }
 };
+
+function rgba(c, a) {
+  return "rgba(" + (c[0] | 0) + "," + (c[1] | 0) + "," + (c[2] | 0) + "," + a.toFixed(3) + ")";
+}
+function melange(a, b, t) {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
 
 function demarrerFond() {
   const cvs = document.getElementById("fond");
   const ctx = cvs.getContext("2d");
-  let W = 0, H = 0, CX = 0, CY = 0, R = 0;
+  const cvsCiel = document.getElementById("ciel");
+  const ciel = cvsCiel.getContext("2d");
+  let W = 0, H = 0, CX = 0, CY = 0, R = 0, ECH = 1, SX = 0, SY = 0;
 
   function dimensionner() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    W = cvs.width = Math.max(1, Math.floor(window.innerWidth * dpr));
-    H = cvs.height = Math.max(1, Math.floor(window.innerHeight * dpr));
-    cvs.style.width = window.innerWidth + "px";
-    cvs.style.height = window.innerHeight + "px";
+    W = cvs.width = cvsCiel.width = Math.max(1, Math.floor(cvs.parentNode.clientWidth * dpr));
+    H = cvs.height = cvsCiel.height = Math.max(1, Math.floor(cvs.parentNode.clientHeight * dpr));
+    for (const c of [cvs, cvsCiel]) {
+      c.style.width = cvs.parentNode.clientWidth + "px";
+      c.style.height = cvs.parentNode.clientHeight + "px";
+    }
     CX = W * 0.5;
     CY = H * 0.40;
     R = W * 0.19;
+    ECH = W / 400;
+    SX = W * 0.83;        // l'objet du ciel, dégagé du grand chiffre de l'heure
+    SY = H * 0.155;
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, W, H);
   }
   dimensionner();
   window.addEventListener("resize", dimensionner);
 
-  // Les particules suivent des orbites képlériennes : les proches vont plus vite.
+  // ── Le disque : orbites képlériennes, les proches vont plus vite ──
   const grains = [];
-  for (let i = 0; i < 520; i++) {
+  for (let i = 0; i < 440; i++) {
     const r = 1.02 + Math.pow(Math.random(), 1.7) * 2.6;
     grains.push({
-      a: Math.random() * Math.PI * 2,
-      r: r,
-      e: 0.10 + Math.random() * 0.10,
-      v: 0.021 / Math.pow(r, 1.5),
-      l: 0.35 + Math.random() * 0.65,
-      xp: 0, yp: 0, neuf: true
+      a: Math.random() * TAU, r: r, e: 0.10 + Math.random() * 0.10,
+      v: 0.021 / Math.pow(r, 1.5), l: 0.35 + Math.random() * 0.65,
+      xp: 0, yp: 0, x: 0, y: 0, neuf: true
     });
   }
 
-  const etat = Object.assign({}, AMBIANCES.nuage);
-  let cible = AMBIANCES.nuage, nuit = 0, cibleNuit = 0, eclair = 0, orage = false;
+  // ── Ce qui tombe du ciel et se fait happer ──
+  const tombants = [];
+  for (let i = 0; i < 170; i++) tombants.push({});
+
+  function naitre(p, type, partout) {
+    p.type = type;
+    p.x = (Math.random() * 1.5 - 0.25) * W;
+    p.y = partout ? Math.random() * CY : -Math.random() * H * 0.35;
+    p.vx = 0;
+    p.taille = 0.9 + Math.random() * 1.4;
+    p.phase = Math.random() * TAU;
+    if (type === "neige") { p.vy = (1.2 + Math.random() * 0.8) * ECH; p.taille *= 1.9; }
+    else if (type === "brume") { p.vy = (0.12 + Math.random() * 0.18) * ECH; p.vx = (Math.random() - 0.5) * ECH; p.taille *= 4; }
+    else { p.vy = (3.0 + Math.random() * 2.4) * ECH; }
+  }
+  for (const p of tombants) naitre(p, "pluie", true);
+
+  const etat = Object.assign({}, TEMPS.nuage);
+  etat.c = TEMPS.nuage.c.slice();
+  etat.h = TEMPS.nuage.h.slice();
+  let cible = TEMPS.nuage, nuit = 0, cibleNuit = 0;
+  let eclair = 0, traitEclair = null, lueurAnneau = 0;
 
   function ambiance(famille, estJour) {
-    cible = AMBIANCES[famille] || AMBIANCES.nuage;
-    cibleNuit = estJour ? 0 : 1;
-    orage = famille === "orage";
+    const clef = (famille === "clair" && estJour === false) ? "clairNuit" : famille;
+    const suivant = TEMPS[clef] || TEMPS.nuage;
+    if (suivant.chute !== cible.chute && suivant.chute) {
+      for (const p of tombants) naitre(p, suivant.chute, true);
+    }
+    cible = suivant;
+    cibleNuit = estJour === false ? 1 : 0;
   }
 
-  function dessinerHorizon(gain) {
+  // ── Le ciel : soleil, lune, nuage, orage ──
+  function dessinerCiel(gain) {
+    const sr = R * 0.42;
+    const teinte = etat.c, ombre = etat.h;
+    ciel.globalCompositeOperation = "lighter";
+
+    if (etat.ciel === "soleil" || etat.ciel === "lune" || etat.ciel === "soleilVoile") {
+      const halo = ciel.createRadialGradient(SX, SY, 0, SX, SY, sr * 2.8);
+      halo.addColorStop(0, rgba(teinte, 0.40 * gain));
+      halo.addColorStop(0.24, rgba(ombre, 0.14 * gain));
+      halo.addColorStop(1, rgba(ombre, 0));
+      ciel.fillStyle = halo;
+      ciel.beginPath(); ciel.arc(SX, SY, sr * 2.8, 0, TAU); ciel.fill();
+
+      ciel.fillStyle = rgba(melange(teinte, [255, 255, 255], 0.45), 0.95 * gain);
+      ciel.beginPath(); ciel.arc(SX, SY, sr, 0, TAU); ciel.fill();
+
+      if (etat.ciel === "lune") {            // on creuse le croissant
+        ciel.globalCompositeOperation = "destination-out";
+        ciel.beginPath(); ciel.arc(SX + sr * 0.42, SY - sr * 0.30, sr * 0.92, 0, TAU); ciel.fill();
+        ciel.globalCompositeOperation = "lighter";
+      }
+    }
+
+    if (etat.ciel === "nuage" || etat.ciel === "orage" || etat.ciel === "soleilVoile") {
+      const gris = etat.ciel === "soleilVoile" ? [150, 164, 178] : etat.h;
+      const dec = etat.ciel === "soleilVoile" ? sr * 0.55 : 0;
+      const corps = melange(gris, [255, 255, 255], 0.22);
+      ciel.globalCompositeOperation = "source-over";
+      const bulles = [[-1.10, 0.28, 0.58], [-0.55, 0.00, 0.88], [0.05, -0.20, 1.02],
+                      [0.72, 0.06, 0.84], [1.35, 0.30, 0.56]];
+      for (let i = 0; i < bulles.length; i++) {
+        const bx = SX + dec + bulles[i][0] * sr;
+        const by = SY + bulles[i][1] * sr + dec * 0.5;
+        const br = sr * bulles[i][2];
+        const b = ciel.createRadialGradient(bx, by, br * 0.15, bx, by, br);
+        b.addColorStop(0, rgba(corps, 0.80 * gain));
+        b.addColorStop(0.62, rgba(corps, 0.62 * gain));
+        b.addColorStop(1, rgba(corps, 0));
+        ciel.fillStyle = b;
+        ciel.beginPath(); ciel.arc(bx, by, br, 0, TAU); ciel.fill();
+      }
+      ciel.globalCompositeOperation = "lighter";
+    }
+  }
+
+  function nouvelEclair() {
+    const pts = [[SX, SY + R * 0.5]];
+    for (let k = 1; k <= 6; k++) {
+      const t = k / 6;
+      pts.push([SX + (CX - SX) * t + (Math.random() - 0.5) * W * 0.15,
+                (SY + R * 0.5) + (CY - SY - R * 0.5) * t]);
+    }
+    traitEclair = pts;
+  }
+
+  function dessinerEclair(gain) {
+    if (!traitEclair) return;
+    ciel.globalCompositeOperation = "lighter";
+    for (let passe = 0; passe < 2; passe++) {
+      ciel.strokeStyle = passe === 0 ? rgba(etat.c, 0.45 * eclair * gain)
+                                     : rgba([255, 255, 255], 0.9 * eclair * gain);
+      ciel.lineWidth = passe === 0 ? 9 * ECH : 2 * ECH;
+      ciel.lineJoin = "round"; ciel.lineCap = "round";
+      ciel.beginPath();
+      ciel.moveTo(traitEclair[0][0], traitEclair[0][1]);
+      for (let i = 1; i < traitEclair.length; i++) ciel.lineTo(traitEclair[i][0], traitEclair[i][1]);
+      ciel.stroke();
+    }
+  }
+
+  // ── La chute, courbée par la gravité du trou noir ──
+  function dessinerChute(gain) {
+    if (!etat.chute) return;
+    const teinte = melange(etat.c, [255, 255, 255], 0.15);
+    ciel.globalCompositeOperation = "lighter";
+
+    for (let i = 0; i < tombants.length; i++) {
+      const p = tombants[i];
+      if (p.type !== etat.chute) naitre(p, etat.chute, true);
+
+      const dx = CX - p.x, dy = CY - p.y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      // Attraction newtonienne, bornée près de l'horizon pour rester stable.
+      // Les flocons et la brume, plus légers, doivent d'abord tomber :
+      // une attraction lointaine trop forte les aspirerait en entonnoir.
+      const prise = p.type === "pluie" ? 2.3 : p.type === "neige" ? 1.0 : 0.6;
+      const f = prise * ECH * R * R / Math.max(d * d, R * R * 0.36);
+      const xa = p.x, ya = p.y;
+      p.vx += (dx / d) * f;
+      p.vy += (dy / d) * f + 0.05 * ECH;
+      if (p.type === "neige") { p.phase += 0.035; p.vx += Math.sin(p.phase) * 0.05 * ECH; }
+
+      // Vitesse bornée à un demi-rayon par image : sans cela une goutte
+      // très accélérée sauterait par-dessus l'horizon sans être happée.
+      const vit = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+      const max = R * 0.5;
+      if (vit > max) { p.vx = p.vx / vit * max; p.vy = p.vy / vit * max; }
+      p.x += p.vx; p.y += p.vy;
+
+      // Avalée : une lueur parcourt l'anneau, et la goutte renaît en haut.
+      if (d < R * 1.03) { lueurAnneau = Math.min(1, lueurAnneau + 0.30); naitre(p, etat.chute); continue; }
+      if (p.x < -W * 0.35 || p.x > W * 1.35) { naitre(p, etat.chute); continue; }
+
+      // La météo appartient à la scène du trou noir : elle s'éteint sous le
+      // disque plutôt que de pleuvoir sur la frise et la bande des jours.
+      const sol = CY + R * 0.3;
+      const reste = p.y > sol ? 1 - (p.y - sol) / (R * 0.7) : 1;
+      if (reste <= 0) { naitre(p, etat.chute); continue; }
+
+      const proche = Math.max(0, 1 - (d - R) / (R * 2.6));
+      const alpha = (0.30 + 0.55 * proche) * gain * reste;
+
+      if (p.type === "neige") {
+        ciel.fillStyle = rgba(teinte, alpha);
+        ciel.beginPath(); ciel.arc(p.x, p.y, p.taille * ECH * 0.9, 0, TAU); ciel.fill();
+      } else if (p.type === "brume") {
+        ciel.fillStyle = rgba(teinte, alpha * 0.16);
+        ciel.beginPath();
+        ciel.ellipse(p.x, p.y, p.taille * ECH * 9, p.taille * ECH * 1.5, 0, 0, TAU);
+        ciel.fill();
+      } else {
+        ciel.strokeStyle = rgba(teinte, alpha);
+        ciel.lineWidth = p.taille * ECH * 0.8;
+        ciel.lineCap = "round";
+        ciel.beginPath(); ciel.moveTo(xa, ya); ciel.lineTo(p.x, p.y); ciel.stroke();
+      }
+    }
+  }
+
+  // ── Le disque ──
+  function dessinerHorizon(gain, teinteDisque) {
     ctx.globalCompositeOperation = "source-over";
     const creux = ctx.createRadialGradient(CX, CY, R * 0.94, CX, CY, R * 1.1);
     creux.addColorStop(0, "rgba(0,0,0,1)");
     creux.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = creux;
-    ctx.beginPath(); ctx.arc(CX, CY, R * 1.1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(CX, CY, R * 1.1, 0, TAU); ctx.fill();
 
-    // Anneau de photons, arc supérieur seulement : la lumière du disque
-    // lointain, courbée par-dessus l'horizon.
+    // Anneau de photons, arc supérieur seulement : c'est le disque passant
+    // devant, en bas, qui referme la silhouette en dôme.
     ctx.globalCompositeOperation = "lighter";
     ctx.lineCap = "butt";
-    ctx.strokeStyle = "rgba(255,255,255," + (0.80 * gain).toFixed(3) + ")";
-    ctx.lineWidth = 1.8;
-    ctx.beginPath(); ctx.arc(CX, CY, R * 1.02, Math.PI, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = "rgba(255,255,255," + (0.22 * gain).toFixed(3) + ")";
+    const vif = Math.min(1, 0.80 + lueurAnneau * 0.6);
+    ctx.strokeStyle = rgba(melange(teinteDisque, [255, 255, 255], 0.4), vif * gain);
+    ctx.lineWidth = (1.8 + lueurAnneau * 2.4) * ECH * 0.5;
+    ctx.beginPath(); ctx.arc(CX, CY, R * 1.02, Math.PI, TAU); ctx.stroke();
+    ctx.strokeStyle = rgba(teinteDisque, (0.22 + lueurAnneau * 0.35) * gain);
     ctx.lineWidth = 7;
-    ctx.beginPath(); ctx.arc(CX, CY, R * 1.06, Math.PI, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(CX, CY, R * 1.06, Math.PI, TAU); ctx.stroke();
     ctx.lineCap = "round";
   }
 
-  function dessinerNappes(gain, lointain) {
+  function dessinerNappes(gain, lointain, teinteDisque) {
     ctx.globalCompositeOperation = "lighter";
     const depart = lointain ? Math.PI : 0;
-    const arrivee = lointain ? Math.PI * 2 : Math.PI;
+    const arrivee = lointain ? TAU : Math.PI;
     const couches = [[1.03, 1.8, 0.62], [1.14, 1.3, 0.38], [1.42, 1.0, 0.20], [1.95, 0.8, 0.11]];
     for (let i = 0; i < couches.length; i++) {
       const rr = couches[i][0], large = couches[i][1], al = couches[i][2];
-      ctx.strokeStyle = "rgba(255,255,255,"
-        + (al * gain * (lointain ? 0.45 : 1) * 0.5).toFixed(3) + ")";
+      ctx.strokeStyle = rgba(teinteDisque, al * gain * (lointain ? 0.45 : 1) * 0.5);
       ctx.lineWidth = large * Math.max(1, etat.epaisseur * 0.8);
       ctx.beginPath();
       ctx.ellipse(CX, CY, R * rr, R * rr * 0.16, 0, depart, arrivee);
@@ -859,9 +1112,7 @@ function demarrerFond() {
     }
   }
 
-  // Une passe par côté du disque : le lointain passe derrière l'horizon,
-  // le proche devant. C'est ce qui donne la silhouette de dôme.
-  function dessinerGrains(visibles, gain, lointain) {
+  function dessinerGrains(visibles, gain, lointain, teinteDisque) {
     ctx.globalCompositeOperation = "lighter";
     for (let i = 0; i < visibles; i++) {
       const g = grains[i];
@@ -872,7 +1123,7 @@ function demarrerFond() {
       const chute = 0.30 + 0.70 * Math.max(0, 1 - (g.r - 1) / 3);
       const alpha = Math.min(g.l * phare * chute * gain * (lointain ? 0.45 : 1) * 0.85, 0.95);
 
-      ctx.strokeStyle = "rgba(255,255,255," + alpha.toFixed(3) + ")";
+      ctx.strokeStyle = rgba(teinteDisque, alpha);
       ctx.lineWidth = (0.6 + g.l * 1.1) * etat.epaisseur;
       ctx.beginPath();
       ctx.moveTo(g.xp, g.yp);
@@ -882,49 +1133,62 @@ function demarrerFond() {
   }
 
   function boucle() {
-    for (const c in etat) etat[c] += (cible[c] - etat[c]) * 0.045;
-    nuit += (cibleNuit - nuit) * 0.045;
+    const k = 0.045;
+    etat.vitesse += (cible.vitesse - etat.vitesse) * k;
+    etat.densite += (cible.densite - etat.densite) * k;
+    etat.eclat += (cible.eclat - etat.eclat) * k;
+    etat.fondu += (cible.fondu - etat.fondu) * k;
+    etat.epaisseur += (cible.epaisseur - etat.epaisseur) * k;
+    for (let i = 0; i < 3; i++) {
+      etat.c[i] += (cible.c[i] - etat.c[i]) * k;
+      etat.h[i] += (cible.h[i] - etat.h[i]) * k;
+    }
+    etat.ciel = cible.ciel;
+    etat.chute = cible.chute;
+    nuit += (cibleNuit - nuit) * k;
+    lueurAnneau *= 0.92;
 
-    // On n'efface pas : on assombrit. Les grains laissent des traînées de lumière.
+    const gain = (1 - nuit * 0.42) * etat.eclat;
+    // Le disque reste blanc, juste teinté par le temps qu'il fait.
+    const teinteDisque = melange([255, 255, 255], etat.c, 0.32);
+
+    // Toile du disque : on assombrit, on n'efface pas.
     ctx.globalCompositeOperation = "source-over";
     ctx.fillStyle = "rgba(0,0,0," + etat.fondu.toFixed(3) + ")";
     ctx.fillRect(0, 0, W, H);
 
-    const gain = (1 - nuit * 0.45) * etat.eclat;
-    // La densité peut dépasser 1 en transition : on ne sort jamais du tableau.
-    const visibles = Math.min(grains.length,
-      Math.max(1, Math.round(grains.length * etat.densite)));
-
-    // Toutes les orbites avancent, même les grains qu'on ne dessine pas :
-    // sinon leur position mémorisée vieillit et produit une traînée aberrante.
+    const visibles = Math.min(grains.length, Math.max(1, Math.round(grains.length * etat.densite)));
     for (let i = 0; i < grains.length; i++) {
       const g = grains[i];
       g.a += g.v * etat.vitesse;
-      if (g.a > Math.PI * 2) g.a -= Math.PI * 2;
+      if (g.a > TAU) g.a -= TAU;
       g.x = CX + Math.cos(g.a) * g.r * R;
       g.y = CY + Math.sin(g.a) * g.r * R * g.e;
       if (g.neuf) { g.xp = g.x; g.yp = g.y; g.neuf = false; }
     }
 
     ctx.lineCap = "round";
-    dessinerNappes(gain, true);
-    dessinerGrains(visibles, gain, true);
-    dessinerHorizon(gain);
-    dessinerNappes(gain, false);
-    dessinerGrains(visibles, gain, false);
-
+    dessinerNappes(gain, true, teinteDisque);
+    dessinerGrains(visibles, gain, true, teinteDisque);
+    dessinerHorizon(gain, teinteDisque);
+    dessinerNappes(gain, false, teinteDisque);
+    dessinerGrains(visibles, gain, false, teinteDisque);
     for (let i = 0; i < grains.length; i++) { grains[i].xp = grains[i].x; grains[i].yp = grains[i].y; }
-
-    // Éclairs, seulement par temps d'orage.
-    if (orage && Math.random() < 0.007) eclair = 1;
-    eclair *= 0.85;
-    if (eclair > 0.02) {
-      ctx.globalCompositeOperation = "lighter";
-      ctx.fillStyle = "rgba(255,255,255," + (eclair * 0.16).toFixed(3) + ")";
-      ctx.fillRect(0, 0, W, H);
-    }
-
     ctx.globalCompositeOperation = "source-over";
+
+    // Toile du ciel : réeffacée, donc rien n'y accumule.
+    ciel.setTransform(1, 0, 0, 1, 0, 0);
+    ciel.clearRect(0, 0, W, H);
+    dessinerCiel(gain);
+    dessinerChute(gain);
+
+    if (etat.ciel === "orage") {
+      if (eclair < 0.02 && Math.random() < 0.012) { nouvelEclair(); eclair = 1; }
+      eclair *= 0.80;
+      if (eclair > 0.02) dessinerEclair(gain);
+    } else { eclair = 0; traitEclair = null; }
+
+    ciel.globalCompositeOperation = "source-over";
     requestAnimationFrame(boucle);
   }
   requestAnimationFrame(boucle);
@@ -941,7 +1205,6 @@ const elTemp = document.getElementById("temp");
 const elQuand = document.getElementById("quand");
 const elEtat = document.getElementById("etat");
 const elVille = document.getElementById("ville");
-const elGlyphe = document.getElementById("glyphe");
 const elJours = document.getElementById("jours");
 const elFrise = document.getElementById("frise");
 const elCourbe = document.getElementById("courbe");
@@ -1041,7 +1304,6 @@ function afficher(i) {
   elTemp.textContent = Math.round(x.t) + "°";
   elEtat.textContent = x.l;
   elQuand.textContent = i === 0 ? "MAINTENANT" : x.j + "  ·  +" + i + "H";
-  elGlyphe.innerHTML = '<g fill="#fff">' + glyphe(x.f, x.d) + "</g>";
   FOND.ambiance(x.f, x.d);
 
   if (!premier) {

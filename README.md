@@ -15,9 +15,10 @@ doigt sur la frise et l'heure visée s'affiche en très grand, la température j
 dessous avec les conditions. Pendant le glissement la lecture grossit, le reste
 s'efface, et les chiffres défilent comme un compteur, dans le sens du doigt.
 
-**Le fond réagit au temps**, dans le widget comme dans la vue : le disque d'accrétion
-est vif et rapide par ciel dégagé, épais et diffus dans le brouillard, criblé de
-gouttes sous la pluie, traversé d'un éclair pendant l'orage, et assombri la nuit.
+**La météo entre dans la scène, en couleur**, dans le widget comme dans la vue :
+le soleil se tient au-dessus du trou noir, la pluie tombe dessus et se fait happer,
+l'éclair descend jusque dans le disque. Le disque, lui, reste blanc mais prend la
+teinte du temps — doré au soleil, bleu sous la pluie, violet à l'orage.
 
 Données : [Open-Meteo](https://open-meteo.com) — gratuit, sans clé API.
 
@@ -79,15 +80,22 @@ possible sans passer par Xcode et une vraie application.
 
 Le même vocabulaire pilote le fond du widget, fixe, et le disque animé de la vue.
 
-| Temps | Fond du widget | Disque animé |
-|---|---|---|
-| Ciel dégagé | Traînées longues et vives, anneau net | Rapide, éclat maximal |
-| Voilé | Légèrement adouci | Un peu ralenti |
-| Couvert | Matière plus rare, trait épaissi | Lumière assourdie |
-| Brouillard | Traits courts et très épais, halo étalé | Très lent et diffus |
-| Pluie | Gouttes fines devant le disque | Traînées longues, éclat retenu |
-| Neige | Flocons épars, traits doux | Presque immobile |
-| Orage | Un éclair jusque dans le disque | Rotation vive, flashs |
+| Temps | Dans le ciel | Ce qui tombe | Teinte du disque |
+|---|---|---|---|
+| Ciel dégagé | Le soleil, doré | — | Doré, traînées longues |
+| Nuit claire | La lune en croissant | — | Bleu pâle, assombri |
+| Voilé | Le soleil derrière un nuage | — | Doré adouci |
+| Couvert | Un nuage gris | — | Gris, matière plus rare |
+| Brouillard | — | Nappes lentes | Gris-bleu, trait épaissi |
+| Pluie | Un nuage bleu | Gouttes happées par le trou | Bleu, éclat retenu |
+| Neige | Un nuage clair | Flocons qui s'incurvent | Blanc-cyan, presque immobile |
+| Orage | Un nuage violet | Pluie, et un éclair | Violet, rotation vive |
+
+Ce qui tombe est attiré par le trou noir selon une loi en 1/d² : les gouttes, lourdes,
+plongent droit dessus ; les flocons, plus légers, tombent d'abord et ne s'incurvent
+qu'en approchant. Une goutte avalée fait courir une lueur le long de l'anneau.
+La météo s'éteint au niveau du disque : elle ne déborde jamais sur la bande des
+jours ni sur la frise.
 
 La nuit assombrit chaque temps d'environ 42 %. À météo égale, le fond du widget est
 toujours dessiné à l'identique : il ne scintille pas entre deux rafraîchissements.
