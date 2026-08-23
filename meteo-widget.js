@@ -234,6 +234,21 @@ function alea(graine) {
   }
 }
 
+// Bancs de nuages : plusieurs formations plutôt qu'un seul nuage isolé.
+// Chaque entrée vaut [x, y, échelle, opacité, dérive], en fractions du cadre.
+const BANCS = {
+  soleilVoile: [[0.83, 0.150, 1.00, 1.00, 0.000]],
+  nuage:       [[0.10, 0.108, 0.72, 0.62, 0.011], [0.40, 0.178, 0.95, 0.82, 0.008],
+                [0.74, 0.122, 1.18, 1.00, 0.014], [1.04, 0.192, 0.86, 0.88, 0.006],
+                [1.34, 0.140, 0.68, 0.70, 0.010]],
+  pluie:       [[0.22, 0.128, 0.74, 0.58, 0.010], [0.60, 0.168, 1.02, 0.92, 0.007],
+                [0.94, 0.118, 1.12, 1.00, 0.013], [1.28, 0.176, 0.72, 0.72, 0.009]],
+  orage:       [[0.24, 0.132, 0.80, 0.66, 0.009], [0.62, 0.172, 1.06, 0.94, 0.006],
+                [0.96, 0.120, 1.16, 1.00, 0.012], [1.30, 0.180, 0.74, 0.74, 0.008]],
+  neige:       [[0.20, 0.126, 0.76, 0.60, 0.008], [0.58, 0.170, 1.00, 0.90, 0.006],
+                [0.92, 0.120, 1.10, 1.00, 0.011], [1.26, 0.178, 0.70, 0.70, 0.007]]
+}
+
 // Mêmes sept temps que la vue interactive : même couleur, même objet dans
 // le ciel, même chose qui tombe — en version fixe.
 const FONDS = {
@@ -313,13 +328,25 @@ function fondTrouNoir(largeur, hauteur, famille, estJour) {
         dc.fillEllipse(new Rect(sx - sr * 0.5, sy - sr * 1.28, sr * 1.84, sr * 1.84))
       }
     } else {
-      const bulles = [[-1.10, 0.28, 0.58], [-0.55, 0.00, 0.88], [0.05, -0.20, 1.02],
-                      [0.72, 0.06, 0.84], [1.35, 0.30, 0.56]]
-      dc.setFillColor(new Color(versHex(melange(f.h, [255, 255, 255], 0.22)), 0.62 * gain))
-      for (let i = 0; i < bulles.length; i++) {
-        const br = sr * bulles[i][2]
-        dc.fillEllipse(new Rect(sx + bulles[i][0] * sr - br, sy + bulles[i][1] * sr - br,
-                                br * 2, br * 2))
+      const nom = f.chute === "neige" ? "neige"
+        : clef === "orage" ? "orage"
+        : f.chute === "pluie" ? "pluie" : "nuage"
+      const corps = versHex(melange(f.h, [255, 255, 255], 0.22))
+      for (const cl of BANCS[nom]) {
+        const nx = largeur * cl[0], ny = hauteur * cl[1], ech = sr * cl[2]
+        const degage = 0.17 + 0.83 * Math.max(0, Math.min(1, (cl[0] - 0.48) / 0.28))
+        const al = cl[3] * degage * 0.62 * gain
+        if (al < 0.01) continue
+        const bulles = cl[2] > 0.9
+          ? [[-1.10, 0.28, 0.58], [-0.55, 0.00, 0.88], [0.05, -0.20, 1.02],
+             [0.72, 0.06, 0.84], [1.35, 0.30, 0.56]]
+          : [[-0.70, 0.20, 0.62], [0.00, -0.12, 0.94], [0.78, 0.18, 0.66]]
+        dc.setFillColor(new Color(corps, al))
+        for (let i = 0; i < bulles.length; i++) {
+          const br = ech * bulles[i][2]
+          dc.fillEllipse(new Rect(nx + bulles[i][0] * ech - br, ny + bulles[i][1] * ech - br,
+                                  br * 2, br * 2))
+        }
       }
     }
   }
@@ -726,7 +753,9 @@ async function vueInteractive(d) {
     + "<meta name='viewport' content='width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no'>"
     + "<style>" + CSS_INTERACTIF + "</style></head><body>"
     + CORPS_INTERACTIF
-    + "<script>const DONNEES = " + charge + ";" + JS_FOND + JS_INTERACTIF + "<\/script>"
+    + "<script>const DONNEES = " + charge
+    + "; const BANCS = " + JSON.stringify(BANCS) + ";"
+    + JS_FOND + JS_INTERACTIF + "<\/script>"
     + "</body></html>"
 
   const vue = new WebView()
@@ -932,7 +961,7 @@ function demarrerFond() {
   etat.c = TEMPS.nuage.c.slice();
   etat.h = TEMPS.nuage.h.slice();
   let cible = TEMPS.nuage, nuit = 0, cibleNuit = 0;
-  let eclair = 0, traitEclair = null, lueurAnneau = 0;
+  let eclair = 0, traitEclair = null, lueurAnneau = 0, derive = 0;
 
   function ambiance(famille, estJour) {
     const clef = (famille === "clair" && estJour === false) ? "clairNuit" : famille;
@@ -968,23 +997,49 @@ function demarrerFond() {
       }
     }
 
-    if (etat.ciel === "nuage" || etat.ciel === "orage" || etat.ciel === "soleilVoile") {
-      const gris = etat.ciel === "soleilVoile" ? [150, 164, 178] : etat.h;
-      const dec = etat.ciel === "soleilVoile" ? sr * 0.55 : 0;
+    const nom = etat.ciel === "soleilVoile" ? "soleilVoile"
+      : (etat.chute === "pluie" && etat.ciel === "orage") ? "orage"
+      : etat.chute === "pluie" ? "pluie"
+      : etat.chute === "neige" ? "neige"
+      : etat.ciel === "nuage" ? "nuage" : null;
+
+    if (nom) {
+      const gris = nom === "soleilVoile" ? [150, 164, 178] : etat.h;
       const corps = melange(gris, [255, 255, 255], 0.22);
+      const banc = BANCS[nom];
       ciel.globalCompositeOperation = "source-over";
-      const bulles = [[-1.10, 0.28, 0.58], [-0.55, 0.00, 0.88], [0.05, -0.20, 1.02],
-                      [0.72, 0.06, 0.84], [1.35, 0.30, 0.56]];
-      for (let i = 0; i < bulles.length; i++) {
-        const bx = SX + dec + bulles[i][0] * sr;
-        const by = SY + bulles[i][1] * sr + dec * 0.5;
-        const br = sr * bulles[i][2];
-        const b = ciel.createRadialGradient(bx, by, br * 0.15, bx, by, br);
-        b.addColorStop(0, rgba(corps, 0.80 * gain));
-        b.addColorStop(0.62, rgba(corps, 0.62 * gain));
-        b.addColorStop(1, rgba(corps, 0));
-        ciel.fillStyle = b;
-        ciel.beginPath(); ciel.arc(bx, by, br, 0, TAU); ciel.fill();
+
+      for (let n = 0; n < banc.length; n++) {
+        const cl = banc[n];
+        // Dérive lente, rebouclée hors cadre pour qu'aucun nuage ne surgisse.
+        let xf = cl[0] + derive * cl[4];
+        xf = ((xf + 0.45) % 1.9 + 1.9) % 1.9 - 0.45;
+        const nx = nom === "soleilVoile" ? SX + sr * 0.55 : W * xf;
+        const ny = nom === "soleilVoile" ? SY + sr * 0.28 : H * cl[1];
+        const ech = sr * cl[2];
+
+        // Les nuages s'estompent à gauche, là où se lisent l'heure et la
+        // température : un banc opaque derrière le texte le rendrait sourd.
+        const degage = nom === "soleilVoile" ? 1
+          : 0.17 + 0.83 * Math.max(0, Math.min(1, (xf - 0.48) / 0.28));
+        const al = cl[3] * degage * 0.82 * gain;
+        if (al < 0.01) continue;
+
+        const bulles = cl[2] > 0.9
+          ? [[-1.10, 0.28, 0.58], [-0.55, 0.00, 0.88], [0.05, -0.20, 1.02],
+             [0.72, 0.06, 0.84], [1.35, 0.30, 0.56]]
+          : [[-0.70, 0.20, 0.62], [0.00, -0.12, 0.94], [0.78, 0.18, 0.66]];
+        for (let i = 0; i < bulles.length; i++) {
+          const bx = nx + bulles[i][0] * ech;
+          const by = ny + bulles[i][1] * ech;
+          const br = ech * bulles[i][2];
+          const b = ciel.createRadialGradient(bx, by, br * 0.15, bx, by, br);
+          b.addColorStop(0, rgba(corps, al));
+          b.addColorStop(0.62, rgba(corps, al * 0.78));
+          b.addColorStop(1, rgba(corps, 0));
+          ciel.fillStyle = b;
+          ciel.beginPath(); ciel.arc(bx, by, br, 0, TAU); ciel.fill();
+        }
       }
       ciel.globalCompositeOperation = "lighter";
     }
@@ -1147,6 +1202,7 @@ function demarrerFond() {
     etat.chute = cible.chute;
     nuit += (cibleNuit - nuit) * k;
     lueurAnneau *= 0.92;
+    derive += 0.0016;
 
     const gain = (1 - nuit * 0.42) * etat.eclat;
     // Le disque reste blanc, juste teinté par le temps qu'il fait.

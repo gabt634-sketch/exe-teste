@@ -85,11 +85,15 @@ Le même vocabulaire pilote le fond du widget, fixe, et le disque animé de la v
 | Ciel dégagé | Le soleil, doré | — | Doré, traînées longues |
 | Nuit claire | La lune en croissant | — | Bleu pâle, assombri |
 | Voilé | Le soleil derrière un nuage | — | Doré adouci |
-| Couvert | Un nuage gris | — | Gris, matière plus rare |
+| Couvert | Un banc de 5 nuages gris | — | Gris, matière plus rare |
 | Brouillard | — | Nappes lentes | Gris-bleu, trait épaissi |
-| Pluie | Un nuage bleu | Gouttes happées par le trou | Bleu, éclat retenu |
-| Neige | Un nuage clair | Flocons qui s'incurvent | Blanc-cyan, presque immobile |
-| Orage | Un nuage violet | Pluie, et un éclair | Violet, rotation vive |
+| Pluie | Un banc de 4 nuages bleus | Gouttes happées par le trou | Bleu, éclat retenu |
+| Neige | Un banc de 4 nuages clairs | Flocons qui s'incurvent | Blanc-cyan, presque immobile |
+| Orage | Un banc de 4 nuages violets | Pluie, et un éclair | Violet, rotation vive |
+
+Les nuages dérivent lentement et se rebouclent hors cadre. Ils s'estompent vers la
+gauche, là où se lisent l'heure et la température : un banc opaque derrière le grand
+chiffre le rendrait sourd.
 
 Ce qui tombe est attiré par le trou noir selon une loi en 1/d² : les gouttes, lourdes,
 plongent droit dessus ; les flocons, plus légers, tombent d'abord et ne s'incurvent
