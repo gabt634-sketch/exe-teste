@@ -422,21 +422,39 @@ function fondTrouNoir(largeur, hauteur, famille, estJour) {
     }
   }
 
-  // ── L'éclair de l'orage, jusque dans le disque ──
+  // ── L'orage : le nuage frappe, et le trou noir décharge ──
   if (clef === "orage") {
-    const base = cx + (suivant() - 0.5) * largeur * 0.5
-    const eclair = new Path()
-    let x = base, y = cy - rayon * 1.6
-    eclair.move(new Point(x, y))
-    for (let k = 0; k < 4; k++) {
-      x += (suivant() - 0.5) * largeur * 0.16
-      y += rayon * 0.40
-      eclair.addLine(new Point(x, y))
+    const brise = (x0, y0, x1, y1, ecart, segments) => {
+      const chemin = new Path()
+      chemin.move(new Point(x0, y0))
+      const dx = x1 - x0, dy = y1 - y0
+      const l = Math.sqrt(dx * dx + dy * dy) || 1
+      for (let k = 1; k <= segments; k++) {
+        const t = k / segments
+        const j = (suivant() - 0.5) * 2 * ecart * Math.sin(Math.PI * t)
+        chemin.addLine(new Point(x0 + dx * t - (dy / l) * j, y0 + dy * t + (dx / l) * j))
+      }
+      return chemin
     }
-    dc.setStrokeColor(new Color(teinteChute, 0.6))
+
+    // Le trait qui descend du nuage.
+    dc.setStrokeColor(new Color(teinteChute, 0.55))
     dc.setLineWidth(1.5)
-    dc.addPath(eclair)
+    dc.addPath(brise(largeur * 0.80, hauteur * 0.30, cx, cy - rayon * 0.9, largeur * 0.06, 7))
     dc.strokePath()
+
+    // Les jets qui jaillissent de l'horizon.
+    for (let i = 0; i < 3; i++) {
+      const a = Math.PI + (0.15 + suivant() * 0.7) * Math.PI
+      const x0 = cx + Math.cos(a) * rayon * 1.02
+      const y0 = cy + Math.sin(a) * rayon * 1.02
+      const portee = rayon * (1.2 + suivant() * 1.5)
+      dc.setStrokeColor(new Color(teinteChute, 0.30 + suivant() * 0.35))
+      dc.setLineWidth(1.2)
+      dc.addPath(brise(x0, y0, x0 + Math.cos(a) * portee, y0 + Math.sin(a) * portee * 0.85,
+                       rayon * 0.16, 7))
+      dc.strokePath()
+    }
   }
 
   // ── Horizon des événements, cerclé de lumière sur son arc supérieur ──
@@ -961,7 +979,7 @@ function demarrerFond() {
   etat.c = TEMPS.nuage.c.slice();
   etat.h = TEMPS.nuage.h.slice();
   let cible = TEMPS.nuage, nuit = 0, cibleNuit = 0;
-  let eclair = 0, traitEclair = null, lueurAnneau = 0, derive = 0;
+  let eclair = 0, traitsEclair = null, lueurAnneau = 0, derive = 0;
 
   function ambiance(famille, estJour) {
     const clef = (famille === "clair" && estJour === false) ? "clairNuit" : famille;
@@ -1045,28 +1063,70 @@ function demarrerFond() {
     }
   }
 
-  function nouvelEclair() {
-    const pts = [[SX, SY + R * 0.5]];
-    for (let k = 1; k <= 6; k++) {
-      const t = k / 6;
-      pts.push([SX + (CX - SX) * t + (Math.random() - 0.5) * W * 0.15,
-                (SY + R * 0.5) + (CY - SY - R * 0.5) * t]);
+  // Un trait d'éclair : une ligne brisée dont l'écart s'annule aux extrémités,
+  // pour qu'elle parte et arrive exactement où on la veut.
+  function cheminEclair(x0, y0, x1, y1, ecart, segments) {
+    const pts = [[x0, y0]];
+    const dx = x1 - x0, dy = y1 - y0;
+    const l = Math.sqrt(dx * dx + dy * dy) || 1;
+    for (let k = 1; k <= segments; k++) {
+      const t = k / segments;
+      const j = (Math.random() - 0.5) * 2 * ecart * Math.sin(Math.PI * t);
+      pts.push([x0 + dx * t - (dy / l) * j, y0 + dy * t + (dx / l) * j]);
     }
-    traitEclair = pts;
+    return pts;
+  }
+
+  function nouvelEclair() {
+    traitsEclair = [];
+
+    // Le nuage frappe l'horizon.
+    traitsEclair.push({
+      pts: cheminEclair(SX, SY + R * 0.5, CX, CY - R * 0.9, W * 0.07, 7),
+      large: 1
+    });
+
+    // Et le trou noir décharge : deux à quatre jets qui jaillissent du bord.
+    const combien = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < combien; i++) {
+      const a = Math.PI + Math.random() * Math.PI;      // arc supérieur
+      const x0 = CX + Math.cos(a) * R * 1.02;
+      const y0 = CY + Math.sin(a) * R * 1.02;
+      const portee = R * (1.3 + Math.random() * 1.7);
+      const x1 = x0 + Math.cos(a) * portee;
+      const y1 = y0 + Math.sin(a) * portee * 0.85;
+      traitsEclair.push({ pts: cheminEclair(x0, y0, x1, y1, R * 0.17, 7), large: 0.85 });
+
+      // Une ramification sur la plupart des jets.
+      if (Math.random() < 0.7) {
+        const j = 2 + Math.floor(Math.random() * 3);
+        const bx = x0 + (x1 - x0) * (j / 7), by = y0 + (y1 - y0) * (j / 7);
+        const ba = a + (Math.random() - 0.5) * 1.2;
+        traitsEclair.push({
+          pts: cheminEclair(bx, by, bx + Math.cos(ba) * portee * 0.55,
+                            by + Math.sin(ba) * portee * 0.5, R * 0.11, 4),
+          large: 0.5
+        });
+      }
+    }
+    lueurAnneau = Math.min(1, lueurAnneau + 0.55);      // l'anneau s'embrase
   }
 
   function dessinerEclair(gain) {
-    if (!traitEclair) return;
+    if (!traitsEclair) return;
     ciel.globalCompositeOperation = "lighter";
+    ciel.lineJoin = "round"; ciel.lineCap = "round";
     for (let passe = 0; passe < 2; passe++) {
-      ciel.strokeStyle = passe === 0 ? rgba(etat.c, 0.45 * eclair * gain)
-                                     : rgba([255, 255, 255], 0.9 * eclair * gain);
-      ciel.lineWidth = passe === 0 ? 9 * ECH : 2 * ECH;
-      ciel.lineJoin = "round"; ciel.lineCap = "round";
-      ciel.beginPath();
-      ciel.moveTo(traitEclair[0][0], traitEclair[0][1]);
-      for (let i = 1; i < traitEclair.length; i++) ciel.lineTo(traitEclair[i][0], traitEclair[i][1]);
-      ciel.stroke();
+      for (let n = 0; n < traitsEclair.length; n++) {
+        const t = traitsEclair[n];
+        ciel.strokeStyle = passe === 0 ? rgba(etat.c, 0.42 * eclair * gain)
+                                       : rgba([255, 255, 255], 0.92 * eclair * gain);
+        ciel.lineWidth = (passe === 0 ? 9 : 2) * ECH * t.large;
+        ciel.beginPath();
+        ciel.moveTo(t.pts[0][0], t.pts[0][1]);
+        for (let i = 1; i < t.pts.length; i++) ciel.lineTo(t.pts[i][0], t.pts[i][1]);
+        ciel.stroke();
+      }
     }
   }
 
@@ -1239,10 +1299,10 @@ function demarrerFond() {
     dessinerChute(gain);
 
     if (etat.ciel === "orage") {
-      if (eclair < 0.02 && Math.random() < 0.012) { nouvelEclair(); eclair = 1; }
+      if (eclair < 0.02 && Math.random() < 0.020) { nouvelEclair(); eclair = 1; }
       eclair *= 0.80;
       if (eclair > 0.02) dessinerEclair(gain);
-    } else { eclair = 0; traitEclair = null; }
+    } else { eclair = 0; traitsEclair = null; }
 
     ciel.globalCompositeOperation = "source-over";
     requestAnimationFrame(boucle);

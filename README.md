@@ -89,11 +89,15 @@ Le même vocabulaire pilote le fond du widget, fixe, et le disque animé de la v
 | Brouillard | — | Nappes lentes | Gris-bleu, trait épaissi |
 | Pluie | Un banc de 4 nuages bleus | Gouttes happées par le trou | Bleu, éclat retenu |
 | Neige | Un banc de 4 nuages clairs | Flocons qui s'incurvent | Blanc-cyan, presque immobile |
-| Orage | Un banc de 4 nuages violets | Pluie, et un éclair | Violet, rotation vive |
+| Orage | Un banc de 4 nuages violets | Pluie, et des décharges | Violet, rotation vive |
 
 Les nuages dérivent lentement et se rebouclent hors cadre. Ils s'estompent vers la
 gauche, là où se lisent l'heure et la température : un banc opaque derrière le grand
 chiffre le rendrait sourd.
+
+Pendant l'orage le trou noir ne fait pas qu'encaisser : le nuage frappe l'horizon,
+et deux à quatre jets ramifiés en jaillissent, partant du bord même du dôme pour se
+détendre vers l'extérieur. L'anneau s'embrase à chaque décharge.
 
 Ce qui tombe est attiré par le trou noir selon une loi en 1/d² : les gouttes, lourdes,
 plongent droit dessus ; les flocons, plus légers, tombent d'abord et ne s'incurvent
