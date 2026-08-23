@@ -224,6 +224,15 @@ function normaliser(json, lieu) {
 
 // ── Dessin : fond « trou noir » ────────────────────────────────
 
+// Générateur déterministe : le fond ne scintille pas d'un rendu à l'autre.
+function alea(graine) {
+  let etat = graine >>> 0
+  return function () {
+    etat = (etat * 1664525 + 1013904223) >>> 0
+    return etat / 4294967296
+  }
+}
+
 function fondTrouNoir(largeur, hauteur) {
   const dc = new DrawContext()
   dc.size = new Size(largeur, hauteur)
@@ -233,24 +242,52 @@ function fondTrouNoir(largeur, hauteur) {
   dc.setFillColor(new Color("#000000"))
   dc.fillRect(new Rect(0, 0, largeur, hauteur))
 
-  // Halo diffus le long du bord inférieur : la lueur du disque.
   const cx = largeur / 2
-  const cy = hauteur * 1.02
-  for (let i = 14; i >= 1; i--) {
-    const rx = largeur * (0.30 + i * 0.075)
-    const ry = 14 + i * 8
-    dc.setFillColor(new Color(BLANC, 0.014))
+  const cy = hauteur * 1.06        // centre de l'horizon, sous le cadre
+  const rayon = largeur * 0.22
+  const suivant = alea(20260823)
+
+  // Halo diffus : la lumière que le disque projette dans le vide.
+  for (let i = 16; i >= 1; i--) {
+    const rx = rayon * (0.9 + i * 0.46)
+    const ry = rayon * (0.12 + i * 0.075)
+    dc.setFillColor(new Color(BLANC, 0.013))
     dc.fillEllipse(new Rect(cx - rx, cy - ry, rx * 2, ry * 2))
   }
 
-  // Filaments du disque d'accrétion.
-  for (let i = 0; i < 6; i++) {
-    const rx = largeur * (0.34 + i * 0.075)
-    const ry = 6 + i * 6.5
-    dc.setStrokeColor(new Color(BLANC, 0.13 - i * 0.019))
-    dc.setLineWidth(1)
-    dc.strokeEllipse(new Rect(cx - rx, cy - ry, rx * 2, ry * 2))
+  // Traînées du disque : des arcs elliptiques, courts et lumineux.
+  // Le côté qui s'approche est plus brillant, comme sur l'image de référence.
+  const traînees = 150
+  for (let n = 0; n < traînees; n++) {
+    const r = rayon * (1.05 + Math.pow(suivant(), 0.55) * 2.9)
+    const aplat = 0.15 + suivant() * 0.09
+    const angle = suivant() * Math.PI * 2
+    const longueur = 0.16 + suivant() * 0.55
+    const derriere = Math.sin(angle) < 0
+
+    const eclat = (0.30 + 0.70 * (0.5 + 0.5 * Math.cos(angle)))
+      * (0.35 + 0.65 * (1 - (r / rayon - 1) / 3))
+      * (derriere ? 0.55 : 1)
+
+    const chemin = new Path()
+    const pas = 7
+    for (let k = 0; k <= pas; k++) {
+      const a = angle + (k / pas) * longueur
+      const p = new Point(cx + Math.cos(a) * r, cy + Math.sin(a) * r * aplat)
+      if (k === 0) chemin.move(p); else chemin.addLine(p)
+    }
+    dc.setStrokeColor(new Color(BLANC, Math.min(eclat * 0.30, 0.5)))
+    dc.setLineWidth(0.5 + suivant() * 1.5)
+    dc.addPath(chemin)
+    dc.strokePath()
   }
+
+  // Horizon des événements : le disque noir, cerclé de lumière.
+  dc.setFillColor(new Color("#000000"))
+  dc.fillEllipse(new Rect(cx - rayon, cy - rayon, rayon * 2, rayon * 2))
+  dc.setStrokeColor(new Color(BLANC, 0.55))
+  dc.setLineWidth(1.2)
+  dc.strokeEllipse(new Rect(cx - rayon, cy - rayon, rayon * 2, rayon * 2))
 
   return dc.getImage()
 }
@@ -551,7 +588,7 @@ async function vueInteractive(d) {
     + "<meta name='viewport' content='width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no'>"
     + "<style>" + CSS_INTERACTIF + "</style></head><body>"
     + CORPS_INTERACTIF
-    + "<script>const DONNEES = " + charge + ";" + JS_INTERACTIF + "<\/script>"
+    + "<script>const DONNEES = " + charge + ";" + JS_FOND + JS_INTERACTIF + "<\/script>"
     + "</body></html>"
 
   const vue = new WebView()
@@ -565,24 +602,31 @@ const CSS_INTERACTIF = `
 html, body { height:100%; background:#000; overflow:hidden;
   font-family:ui-monospace,"SF Mono",Menlo,monospace; color:#fff; }
 
-/* Le halo et le disque d'accrétion, sous tout le reste. */
-#halo { position:fixed; left:50%; bottom:-56vh; width:200vw; height:96vh; transform:translateX(-50%);
-  background:radial-gradient(ellipse at 50% 50%, rgba(255,255,255,.22) 0%, rgba(255,255,255,.05) 36%,
-  rgba(255,255,255,0) 70%); pointer-events:none; z-index:0; }
-#disque { position:fixed; left:50%; bottom:-13vh; width:165vw; height:26vh; transform:translateX(-50%);
-  border-radius:50%; border-top:1px solid rgba(255,255,255,.55);
-  box-shadow:0 -1px 30px rgba(255,255,255,.30), inset 0 8px 40px rgba(255,255,255,.10);
-  pointer-events:none; z-index:0; }
+/* Le disque d'accrétion, animé, sous tout le reste. */
+#fond { position:fixed; inset:0; z-index:0; display:block; }
+#grain { position:fixed; inset:0; z-index:2; pointer-events:none; opacity:.045;
+  background:repeating-linear-gradient(0deg, rgba(255,255,255,.7) 0 1px, transparent 1px 3px); }
 
 #page { position:relative; z-index:1; height:100%; display:flex; flex-direction:column;
   padding:calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 16px); }
 #ville { font-size:12px; letter-spacing:.22em; opacity:.55; }
 #quand { margin-top:22px; font-size:12px; letter-spacing:.2em; opacity:.55; height:15px; }
 #temp { font-family:-apple-system,system-ui,sans-serif; font-weight:900; font-size:104px;
-  line-height:.94; letter-spacing:-.05em; font-variant-numeric:tabular-nums; }
+  line-height:.94; letter-spacing:-.05em; font-variant-numeric:tabular-nums;
+  text-shadow:0 0 34px rgba(255,255,255,.30); }
 #etat { margin-top:4px; font-size:12px; letter-spacing:.2em; opacity:.62; height:16px; }
 #glyphe { position:absolute; top:calc(env(safe-area-inset-top) + 78px); right:24px;
-  width:74px; height:74px; opacity:.92; }
+  width:74px; height:74px; opacity:.92; filter:drop-shadow(0 0 18px rgba(255,255,255,.35)); }
+
+/* Secousse brève à chaque saut d'heure : la matière se réaligne. */
+@keyframes secousse {
+  0%   { transform:translate3d(0,0,0); clip-path:inset(0 0 0 0); }
+  22%  { transform:translate3d(-5px,0,0); clip-path:inset(16% 0 46% 0); }
+  44%  { transform:translate3d(4px,0,0);  clip-path:inset(54% 0 14% 0); }
+  66%  { transform:translate3d(-2px,0,0); clip-path:inset(0 0 0 0); }
+  100% { transform:translate3d(0,0,0); clip-path:inset(0 0 0 0); }
+}
+#temp.saut { animation:secousse .22s ease-out; }
 
 /* Bande des jours, comme en bas du widget. */
 #jours { display:flex; justify-content:space-between; gap:2px; margin-top:auto; padding-top:16px;
@@ -595,20 +639,22 @@ html, body { height:100%; background:#000; overflow:hidden;
 .jour .max { font-size:12px; font-weight:700; }
 .jour .min { font-size:12px; opacity:.5; }
 
-/* Frise de défilement, placée dans la zone du pouce. */
+/* Frise de défilement, dans la zone du pouce. */
 #frise { position:relative; margin-top:22px; height:300px; touch-action:none; }
+#frise::before { content:""; position:absolute; inset:-14px -24px -18px -24px; pointer-events:none;
+  background:linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,.18) 60%, rgba(0,0,0,0)); }
 #courbe { position:absolute; inset:0; width:100%; height:100%; }
 #curseur { position:absolute; top:0; bottom:34px; width:1px; background:rgba(255,255,255,.75);
-  transform:translateX(-.5px); }
+  transform:translateX(-.5px); box-shadow:0 0 12px rgba(255,255,255,.5); }
 #pastille { position:absolute; width:11px; height:11px; margin:-5.5px 0 0 -5.5px; border-radius:50%;
-  background:#fff; box-shadow:0 0 14px rgba(255,255,255,.9); }
+  background:#fff; box-shadow:0 0 18px rgba(255,255,255,.95); }
 #heures { position:absolute; left:0; right:0; bottom:0; height:28px; display:flex;
   justify-content:space-between; font-size:10px; letter-spacing:.1em; opacity:.4; }
 #aide { text-align:center; font-size:10px; letter-spacing:.18em; opacity:.3; margin-top:4px; }
 `
 
 const CORPS_INTERACTIF = `
-<div id="halo"></div><div id="disque"></div>
+<canvas id="fond"></canvas>
 <div id="page">
   <div id="ville"></div>
   <svg id="glyphe" viewBox="0 0 64 64"></svg>
@@ -624,6 +670,173 @@ const CORPS_INTERACTIF = `
   </div>
   <div id="aide">GLISSER POUR PARCOURIR LES HEURES</div>
 </div>
+<div id="grain"></div>
+`
+
+// Disque d'accrétion animé : la matière tourne, la météo la sculpte.
+const JS_FOND = `
+const AMBIANCES = {
+  clair: { vitesse:1.30, densite:1.00, eclat:1.00, fondu:0.055, epaisseur:0.9 },
+  voile: { vitesse:1.05, densite:0.92, eclat:0.86, fondu:0.062, epaisseur:1.2 },
+  nuage: { vitesse:0.80, densite:0.78, eclat:0.70, fondu:0.078, epaisseur:1.7 },
+  brume: { vitesse:0.50, densite:0.64, eclat:0.56, fondu:0.085, epaisseur:2.6 },
+  pluie: { vitesse:1.10, densite:1.00, eclat:0.74, fondu:0.052, epaisseur:1.0 },
+  neige: { vitesse:0.46, densite:1.00, eclat:0.82, fondu:0.088, epaisseur:1.8 },
+  orage: { vitesse:1.70, densite:1.00, eclat:1.00, fondu:0.045, epaisseur:0.8 }
+};
+
+function demarrerFond() {
+  const cvs = document.getElementById("fond");
+  const ctx = cvs.getContext("2d");
+  let W = 0, H = 0, CX = 0, CY = 0, R = 0;
+
+  function dimensionner() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = cvs.width = Math.max(1, Math.floor(window.innerWidth * dpr));
+    H = cvs.height = Math.max(1, Math.floor(window.innerHeight * dpr));
+    cvs.style.width = window.innerWidth + "px";
+    cvs.style.height = window.innerHeight + "px";
+    CX = W * 0.5;
+    CY = H * 0.36;
+    R = W * 0.19;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, W, H);
+  }
+  dimensionner();
+  window.addEventListener("resize", dimensionner);
+
+  // Les particules suivent des orbites képlériennes : les proches vont plus vite.
+  const grains = [];
+  for (let i = 0; i < 520; i++) {
+    const r = 1.02 + Math.pow(Math.random(), 1.7) * 2.6;
+    grains.push({
+      a: Math.random() * Math.PI * 2,
+      r: r,
+      e: 0.10 + Math.random() * 0.10,
+      v: 0.021 / Math.pow(r, 1.5),
+      l: 0.35 + Math.random() * 0.65,
+      xp: 0, yp: 0, neuf: true
+    });
+  }
+
+  const etat = Object.assign({}, AMBIANCES.nuage);
+  let cible = AMBIANCES.nuage, nuit = 0, cibleNuit = 0, eclair = 0, orage = false;
+
+  function ambiance(famille, estJour) {
+    cible = AMBIANCES[famille] || AMBIANCES.nuage;
+    cibleNuit = estJour ? 0 : 1;
+    orage = famille === "orage";
+  }
+
+  function dessinerHorizon(gain) {
+    ctx.globalCompositeOperation = "source-over";
+    const creux = ctx.createRadialGradient(CX, CY, R * 0.94, CX, CY, R * 1.1);
+    creux.addColorStop(0, "rgba(0,0,0,1)");
+    creux.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = creux;
+    ctx.beginPath(); ctx.arc(CX, CY, R * 1.1, 0, Math.PI * 2); ctx.fill();
+
+    // Anneau de photons, arc supérieur seulement : la lumière du disque
+    // lointain, courbée par-dessus l'horizon.
+    ctx.globalCompositeOperation = "lighter";
+    ctx.lineCap = "butt";
+    ctx.strokeStyle = "rgba(255,255,255," + (0.80 * gain).toFixed(3) + ")";
+    ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.arc(CX, CY, R * 1.02, Math.PI, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255," + (0.22 * gain).toFixed(3) + ")";
+    ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.arc(CX, CY, R * 1.06, Math.PI, Math.PI * 2); ctx.stroke();
+    ctx.lineCap = "round";
+  }
+
+  function dessinerNappes(gain, lointain) {
+    ctx.globalCompositeOperation = "lighter";
+    const depart = lointain ? Math.PI : 0;
+    const arrivee = lointain ? Math.PI * 2 : Math.PI;
+    const couches = [[1.03, 1.8, 0.62], [1.14, 1.3, 0.38], [1.42, 1.0, 0.20], [1.95, 0.8, 0.11]];
+    for (let i = 0; i < couches.length; i++) {
+      const rr = couches[i][0], large = couches[i][1], al = couches[i][2];
+      ctx.strokeStyle = "rgba(255,255,255,"
+        + (al * gain * (lointain ? 0.45 : 1) * 0.5).toFixed(3) + ")";
+      ctx.lineWidth = large * Math.max(1, etat.epaisseur * 0.8);
+      ctx.beginPath();
+      ctx.ellipse(CX, CY, R * rr, R * rr * 0.16, 0, depart, arrivee);
+      ctx.stroke();
+    }
+  }
+
+  // Une passe par côté du disque : le lointain passe derrière l'horizon,
+  // le proche devant. C'est ce qui donne la silhouette de dôme.
+  function dessinerGrains(visibles, gain, lointain) {
+    ctx.globalCompositeOperation = "lighter";
+    for (let i = 0; i < visibles; i++) {
+      const g = grains[i];
+      if ((Math.sin(g.a) < 0) !== lointain) continue;
+
+      // Effet de phare : le côté qui vient vers nous brille davantage.
+      const phare = 0.28 + 0.72 * (0.5 + 0.5 * Math.cos(g.a));
+      const chute = 0.30 + 0.70 * Math.max(0, 1 - (g.r - 1) / 3);
+      const alpha = Math.min(g.l * phare * chute * gain * (lointain ? 0.45 : 1) * 0.85, 0.95);
+
+      ctx.strokeStyle = "rgba(255,255,255," + alpha.toFixed(3) + ")";
+      ctx.lineWidth = (0.6 + g.l * 1.1) * etat.epaisseur;
+      ctx.beginPath();
+      ctx.moveTo(g.xp, g.yp);
+      ctx.lineTo(g.x, g.y);
+      ctx.stroke();
+    }
+  }
+
+  function boucle() {
+    for (const c in etat) etat[c] += (cible[c] - etat[c]) * 0.045;
+    nuit += (cibleNuit - nuit) * 0.045;
+
+    // On n'efface pas : on assombrit. Les grains laissent des traînées de lumière.
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "rgba(0,0,0," + etat.fondu.toFixed(3) + ")";
+    ctx.fillRect(0, 0, W, H);
+
+    const gain = (1 - nuit * 0.45) * etat.eclat;
+    // La densité peut dépasser 1 en transition : on ne sort jamais du tableau.
+    const visibles = Math.min(grains.length,
+      Math.max(1, Math.round(grains.length * etat.densite)));
+
+    // Toutes les orbites avancent, même les grains qu'on ne dessine pas :
+    // sinon leur position mémorisée vieillit et produit une traînée aberrante.
+    for (let i = 0; i < grains.length; i++) {
+      const g = grains[i];
+      g.a += g.v * etat.vitesse;
+      if (g.a > Math.PI * 2) g.a -= Math.PI * 2;
+      g.x = CX + Math.cos(g.a) * g.r * R;
+      g.y = CY + Math.sin(g.a) * g.r * R * g.e;
+      if (g.neuf) { g.xp = g.x; g.yp = g.y; g.neuf = false; }
+    }
+
+    ctx.lineCap = "round";
+    dessinerNappes(gain, true);
+    dessinerGrains(visibles, gain, true);
+    dessinerHorizon(gain);
+    dessinerNappes(gain, false);
+    dessinerGrains(visibles, gain, false);
+
+    for (let i = 0; i < grains.length; i++) { grains[i].xp = grains[i].x; grains[i].yp = grains[i].y; }
+
+    // Éclairs, seulement par temps d'orage.
+    if (orage && Math.random() < 0.007) eclair = 1;
+    eclair *= 0.85;
+    if (eclair > 0.02) {
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = "rgba(255,255,255," + (eclair * 0.16).toFixed(3) + ")";
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    ctx.globalCompositeOperation = "source-over";
+    requestAnimationFrame(boucle);
+  }
+  requestAnimationFrame(boucle);
+
+  return { ambiance: ambiance, redimensionner: dimensionner };
+}
 `
 
 const JS_INTERACTIF = `
@@ -641,8 +854,9 @@ const elPastille = document.getElementById("pastille");
 const elHeures = document.getElementById("heures");
 
 elVille.textContent = DONNEES.ville;
+const FOND = demarrerFond();
 
-// ── Glyphes météo, dessinés en blanc plein ──
+// ── Glyphes météo, en blanc plein ──
 function glyphe(famille, estJour) {
   const nuage = '<circle cx="24" cy="34" r="10"/><circle cx="39" cy="31" r="13"/>'
               + '<rect x="24" y="34" width="21" height="10" rx="5"/>';
@@ -701,10 +915,10 @@ aire += "L" + L + "," + (HT - BAS) + "Z";
 
 elCourbe.innerHTML =
     '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">'
-  + '<stop offset="0" stop-color="#fff" stop-opacity=".22"/>'
+  + '<stop offset="0" stop-color="#fff" stop-opacity=".24"/>'
   + '<stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>'
   + '<path d="' + aire + '" fill="url(#g)"/>'
-  + '<path d="' + ligne + '" fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="2"'
+  + '<path d="' + ligne + '" fill="none" stroke="#fff" stroke-opacity=".9" stroke-width="2"'
   + ' vector-effect="non-scaling-stroke" stroke-linejoin="round"/>';
 
 let reperes = "";
@@ -716,6 +930,7 @@ let indexActuel = -1;
 
 function afficher(i) {
   if (i === indexActuel) return;
+  const premier = indexActuel < 0;
   indexActuel = i;
   const x = H[i];
 
@@ -723,6 +938,13 @@ function afficher(i) {
   elEtat.textContent = x.l;
   elQuand.textContent = i === 0 ? "MAINTENANT" : x.j + " · " + x.h + "H  +" + i + "H";
   elGlyphe.innerHTML = '<g fill="#fff">' + glyphe(x.f, x.d) + "</g>";
+  FOND.ambiance(x.f, x.d);
+
+  if (!premier) {
+    elTemp.classList.remove("saut");
+    void elTemp.offsetWidth;
+    elTemp.classList.add("saut");
+  }
 
   for (let k = 0; k < colonnes.length; k++) {
     colonnes[k].className = colonnes[k].dataset.jour === x.dt ? "jour actif" : "jour";
