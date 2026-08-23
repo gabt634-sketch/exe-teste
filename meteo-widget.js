@@ -203,7 +203,7 @@ function normaliser(json, lieu) {
     })
   }
 
-  const [libelle, symbole] = infoMeteo(actuel.weather_code, actuel.is_day === 1)
+  const [libelle, symbole, famille] = infoMeteo(actuel.weather_code, actuel.is_day === 1)
   return {
     ville: lieu.nom,
     temp: actuel.temperature_2m,
@@ -214,7 +214,7 @@ function normaliser(json, lieu) {
     uniteTemp: CONFIG.unites === "imperial" ? "°F" : "°C",
     code: actuel.weather_code,
     estJour: actuel.is_day === 1,
-    libelle, symbole,
+    libelle, symbole, famille,
     min: json.daily.temperature_2m_min[0],
     max: json.daily.temperature_2m_max[0],
     heures, jours,
@@ -222,18 +222,36 @@ function normaliser(json, lieu) {
   }
 }
 
-// ── Dessin : fond « trou noir » ────────────────────────────────
+// ── Dessin : fond « trou noir », réglé par la météo ────────────
 
-// Générateur déterministe : le fond ne scintille pas d'un rendu à l'autre.
+// Générateur déterministe : à météo égale, le fond ne scintille pas d'un
+// rendu à l'autre. Chaque temps a sa propre graine, donc son propre dessin.
 function alea(graine) {
-  let etat = graine >>> 0
+  let etat = (graine >>> 0) || 1
   return function () {
     etat = (etat * 1664525 + 1013904223) >>> 0
     return etat / 4294967296
   }
 }
 
-function fondTrouNoir(largeur, hauteur) {
+// Mêmes sept ambiances que le disque animé de la vue interactive.
+const FONDS = {
+  clair: { grains: 175, eclat: 1.00, longueur: 1.00, trait: 1.00, anneau: 0.62, halo: 1.00 },
+  voile: { grains: 155, eclat: 0.84, longueur: 0.88, trait: 1.25, anneau: 0.50, halo: 0.90 },
+  nuage: { grains: 120, eclat: 0.64, longueur: 0.70, trait: 1.65, anneau: 0.38, halo: 0.75 },
+  brume: { grains: 105, eclat: 0.50, longueur: 0.40, trait: 2.70, anneau: 0.26, halo: 1.15 },
+  pluie: { grains: 150, eclat: 0.70, longueur: 1.18, trait: 1.05, anneau: 0.42, halo: 0.70 },
+  neige: { grains: 175, eclat: 0.78, longueur: 0.46, trait: 1.75, anneau: 0.44, halo: 0.95 },
+  orage: { grains: 165, eclat: 1.00, longueur: 1.40, trait: 0.90, anneau: 0.72, halo: 0.85 }
+}
+
+const GRAINES = { clair: 11, voile: 23, nuage: 37, brume: 51, pluie: 67, neige: 83, orage: 97 }
+
+function fondTrouNoir(largeur, hauteur, famille, estJour) {
+  const f = FONDS[famille] || FONDS.nuage
+  const nuit = estJour === false
+  const gain = f.eclat * (nuit ? 0.58 : 1)
+
   const dc = new DrawContext()
   dc.size = new Size(largeur, hauteur)
   dc.opaque = true
@@ -243,31 +261,30 @@ function fondTrouNoir(largeur, hauteur) {
   dc.fillRect(new Rect(0, 0, largeur, hauteur))
 
   const cx = largeur / 2
-  const cy = hauteur * 1.06        // centre de l'horizon, sous le cadre
+  const cy = hauteur * 1.03            // horizon juste sous le cadre
   const rayon = largeur * 0.22
-  const suivant = alea(20260823)
+  const suivant = alea(20260823 + (GRAINES[famille] || 37) * 7919)
 
-  // Halo diffus : la lumière que le disque projette dans le vide.
+  // Halo : la lumière que le disque projette dans le vide. Le brouillard
+  // l'étale, la pluie le retient.
   for (let i = 16; i >= 1; i--) {
-    const rx = rayon * (0.9 + i * 0.46)
-    const ry = rayon * (0.12 + i * 0.075)
-    dc.setFillColor(new Color(BLANC, 0.013))
+    const rx = rayon * (0.9 + i * 0.46) * f.halo
+    const ry = rayon * (0.12 + i * 0.075) * f.halo
+    dc.setFillColor(new Color(BLANC, 0.013 * gain))
     dc.fillEllipse(new Rect(cx - rx, cy - ry, rx * 2, ry * 2))
   }
 
-  // Traînées du disque : des arcs elliptiques, courts et lumineux.
-  // Le côté qui s'approche est plus brillant, comme sur l'image de référence.
-  const traînees = 150
-  for (let n = 0; n < traînees; n++) {
+  // Traînées du disque. Le côté qui s'approche brille davantage.
+  for (let n = 0; n < f.grains; n++) {
     const r = rayon * (1.05 + Math.pow(suivant(), 0.55) * 2.9)
-    const aplat = 0.15 + suivant() * 0.09
+    const aplat = 0.14 + suivant() * 0.09
     const angle = suivant() * Math.PI * 2
-    const longueur = 0.16 + suivant() * 0.55
+    const longueur = (0.14 + suivant() * 0.52) * f.longueur
     const derriere = Math.sin(angle) < 0
 
     const eclat = (0.30 + 0.70 * (0.5 + 0.5 * Math.cos(angle)))
       * (0.35 + 0.65 * (1 - (r / rayon - 1) / 3))
-      * (derriere ? 0.55 : 1)
+      * (derriere ? 0.55 : 1) * gain
 
     const chemin = new Path()
     const pas = 7
@@ -276,18 +293,64 @@ function fondTrouNoir(largeur, hauteur) {
       const p = new Point(cx + Math.cos(a) * r, cy + Math.sin(a) * r * aplat)
       if (k === 0) chemin.move(p); else chemin.addLine(p)
     }
-    dc.setStrokeColor(new Color(BLANC, Math.min(eclat * 0.30, 0.5)))
-    dc.setLineWidth(0.5 + suivant() * 1.5)
+    dc.setStrokeColor(new Color(BLANC, Math.min(eclat * 0.32, 0.5)))
+    dc.setLineWidth((0.5 + suivant() * 1.4) * f.trait)
     dc.addPath(chemin)
     dc.strokePath()
   }
 
-  // Horizon des événements : le disque noir, cerclé de lumière.
+  // Signature propre à chaque temps, posée sur le disque.
+  if (famille === "pluie") {
+    for (let n = 0; n < 46; n++) {
+      const x = suivant() * largeur
+      const y = hauteur - suivant() * rayon * 1.5
+      const h = 5 + suivant() * 13
+      const trait = new Path()
+      trait.move(new Point(x, y))
+      trait.addLine(new Point(x - 1.5, y + h))
+      dc.setStrokeColor(new Color(BLANC, 0.10 + suivant() * 0.16))
+      dc.setLineWidth(0.9)
+      dc.addPath(trait)
+      dc.strokePath()
+    }
+  } else if (famille === "neige") {
+    for (let n = 0; n < 40; n++) {
+      const x = suivant() * largeur
+      const y = hauteur - suivant() * rayon * 2
+      const d = 1 + suivant() * 2
+      dc.setFillColor(new Color(BLANC, 0.14 + suivant() * 0.22))
+      dc.fillEllipse(new Rect(x, y, d, d))
+    }
+  } else if (famille === "orage") {
+    const base = cx + (suivant() - 0.5) * largeur * 0.5
+    const eclair = new Path()
+    let x = base, y = cy - rayon * 1.5
+    eclair.move(new Point(x, y))
+    for (let k = 0; k < 4; k++) {
+      x += (suivant() - 0.5) * largeur * 0.16
+      y += rayon * 0.38
+      eclair.addLine(new Point(x, y))
+    }
+    dc.setStrokeColor(new Color(BLANC, 0.5))
+    dc.setLineWidth(1.4)
+    dc.addPath(eclair)
+    dc.strokePath()
+  }
+
+  // Horizon des événements, cerclé de lumière sur son arc supérieur.
   dc.setFillColor(new Color("#000000"))
   dc.fillEllipse(new Rect(cx - rayon, cy - rayon, rayon * 2, rayon * 2))
-  dc.setStrokeColor(new Color(BLANC, 0.55))
-  dc.setLineWidth(1.2)
-  dc.strokeEllipse(new Rect(cx - rayon, cy - rayon, rayon * 2, rayon * 2))
+  const arc = new Path()
+  const pas = 40
+  for (let k = 0; k <= pas; k++) {
+    const a = Math.PI + (k / pas) * Math.PI
+    const p = new Point(cx + Math.cos(a) * rayon * 1.02, cy + Math.sin(a) * rayon * 1.02)
+    if (k === 0) arc.move(p); else arc.addLine(p)
+  }
+  dc.setStrokeColor(new Color(BLANC, f.anneau * gain))
+  dc.setLineWidth(1.3)
+  dc.addPath(arc)
+  dc.strokePath()
 
   return dc.getImage()
 }
@@ -536,7 +599,7 @@ function construire(d, famille, horsLigne) {
   const dimensions = famille === "small" ? [340, 340]
     : (famille === "large" || famille === "extraLarge") ? [728, 764]
     : [728, 340]
-  w.backgroundImage = fondTrouNoir(dimensions[0], dimensions[1])
+  w.backgroundImage = fondTrouNoir(dimensions[0], dimensions[1], d.famille, d.estJour)
   w.backgroundColor = new Color("#000000")
   w.setPadding(14, 15, 14, 15)
   w.url = "scriptable:///run/" + encodeURIComponent(Script.name())
@@ -610,23 +673,49 @@ html, body { height:100%; background:#000; overflow:hidden;
 #page { position:relative; z-index:1; height:100%; display:flex; flex-direction:column;
   padding:calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 16px); }
 #ville { font-size:12px; letter-spacing:.22em; opacity:.55; }
-#quand { margin-top:22px; font-size:12px; letter-spacing:.2em; opacity:.55; height:15px; }
-#temp { font-family:-apple-system,system-ui,sans-serif; font-weight:900; font-size:104px;
-  line-height:.94; letter-spacing:-.05em; font-variant-numeric:tabular-nums;
-  text-shadow:0 0 34px rgba(255,255,255,.30); }
-#etat { margin-top:4px; font-size:12px; letter-spacing:.2em; opacity:.62; height:16px; }
-#glyphe { position:absolute; top:calc(env(safe-area-inset-top) + 78px); right:24px;
-  width:74px; height:74px; opacity:.92; filter:drop-shadow(0 0 18px rgba(255,255,255,.35)); }
 
-/* Secousse brève à chaque saut d'heure : la matière se réaligne. */
-@keyframes secousse {
-  0%   { transform:translate3d(0,0,0); clip-path:inset(0 0 0 0); }
-  22%  { transform:translate3d(-5px,0,0); clip-path:inset(16% 0 46% 0); }
-  44%  { transform:translate3d(4px,0,0);  clip-path:inset(54% 0 14% 0); }
-  66%  { transform:translate3d(-2px,0,0); clip-path:inset(0 0 0 0); }
-  100% { transform:translate3d(0,0,0); clip-path:inset(0 0 0 0); }
+/* Le bloc de lecture : l'heure en titre, la température juste dessous. */
+#lecture { margin-top:20px; transform-origin:left top; transition:transform .22s ease; }
+#quand { font-size:11px; letter-spacing:.2em; opacity:.55; height:14px; }
+#heure { font-family:-apple-system,system-ui,sans-serif; font-weight:900; font-size:116px;
+  line-height:.9; letter-spacing:-.055em; font-variant-numeric:tabular-nums;
+  text-shadow:0 0 42px rgba(255,255,255,.34); }
+#bas { display:flex; align-items:baseline; gap:14px; margin-top:10px; }
+#temp { font-family:-apple-system,system-ui,sans-serif; font-weight:800; font-size:46px;
+  line-height:1; letter-spacing:-.035em; font-variant-numeric:tabular-nums;
+  text-shadow:0 0 26px rgba(255,255,255,.26); }
+#etat { font-size:11px; letter-spacing:.2em; opacity:.62; }
+#glyphe { position:absolute; top:calc(env(safe-area-inset-top) + 92px); right:24px;
+  width:78px; height:78px; opacity:.92; filter:drop-shadow(0 0 20px rgba(255,255,255,.35)); }
+
+/* Pendant le glissement, la lecture grossit et le reste s'efface. */
+#page.scrute #lecture { transform:scale(1.08); }
+#page.scrute #jours { opacity:.18; }
+#page.scrute #aide { opacity:0; }
+#jours, #aide { transition:opacity .22s ease; }
+
+/* Les chiffres défilent comme un compteur, dans le sens du glissement. */
+@keyframes monte {
+  from { transform:translateY(.34em); opacity:0; filter:blur(5px); }
+  to   { transform:translateY(0); opacity:1; filter:blur(0); }
 }
-#temp.saut { animation:secousse .22s ease-out; }
+@keyframes descend {
+  from { transform:translateY(-.34em); opacity:0; filter:blur(5px); }
+  to   { transform:translateY(0); opacity:1; filter:blur(0); }
+}
+#heure.avant, #temp.avant   { animation:monte .26s cubic-bezier(.2,.85,.3,1); }
+#heure.arriere, #temp.arriere { animation:descend .26s cubic-bezier(.2,.85,.3,1); }
+#temp.avant, #temp.arriere  { animation-duration:.3s; }
+
+@media (prefers-reduced-motion: reduce) {
+  #heure, #temp { animation:none !important; }
+  #lecture { transition:none; }
+}
+@media (max-height:720px) {
+  #heure { font-size:88px; }
+  #temp { font-size:38px; }
+  #glyphe { width:62px; height:62px; }
+}
 
 /* Bande des jours, comme en bas du widget. */
 #jours { display:flex; justify-content:space-between; gap:2px; margin-top:auto; padding-top:16px;
@@ -658,9 +747,14 @@ const CORPS_INTERACTIF = `
 <div id="page">
   <div id="ville"></div>
   <svg id="glyphe" viewBox="0 0 64 64"></svg>
-  <div id="quand"></div>
-  <div id="temp">--</div>
-  <div id="etat"></div>
+  <div id="lecture">
+    <div id="quand"></div>
+    <div id="heure">--</div>
+    <div id="bas">
+      <div id="temp">--</div>
+      <div id="etat"></div>
+    </div>
+  </div>
   <div id="jours"></div>
   <div id="frise">
     <svg id="courbe" preserveAspectRatio="none"></svg>
@@ -697,7 +791,7 @@ function demarrerFond() {
     cvs.style.width = window.innerWidth + "px";
     cvs.style.height = window.innerHeight + "px";
     CX = W * 0.5;
-    CY = H * 0.36;
+    CY = H * 0.40;
     R = W * 0.19;
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, W, H);
@@ -841,6 +935,8 @@ function demarrerFond() {
 
 const JS_INTERACTIF = `
 const H = DONNEES.heures;
+const elPage = document.getElementById("page");
+const elHeure = document.getElementById("heure");
 const elTemp = document.getElementById("temp");
 const elQuand = document.getElementById("quand");
 const elEtat = document.getElementById("etat");
@@ -928,22 +1024,29 @@ elHeures.innerHTML = reperes;
 // ── Affichage d'une heure ──
 let indexActuel = -1;
 
+function relancer(el, arriere) {
+  el.classList.remove("avant", "arriere");
+  void el.offsetWidth;                      // force le navigateur à rejouer l'animation
+  el.classList.add(arriere ? "arriere" : "avant");
+}
+
 function afficher(i) {
   if (i === indexActuel) return;
   const premier = indexActuel < 0;
+  const arriere = !premier && i < indexActuel;
   indexActuel = i;
   const x = H[i];
 
+  elHeure.textContent = x.h + "H";
   elTemp.textContent = Math.round(x.t) + "°";
   elEtat.textContent = x.l;
-  elQuand.textContent = i === 0 ? "MAINTENANT" : x.j + " · " + x.h + "H  +" + i + "H";
+  elQuand.textContent = i === 0 ? "MAINTENANT" : x.j + "  ·  +" + i + "H";
   elGlyphe.innerHTML = '<g fill="#fff">' + glyphe(x.f, x.d) + "</g>";
   FOND.ambiance(x.f, x.d);
 
   if (!premier) {
-    elTemp.classList.remove("saut");
-    void elTemp.offsetWidth;
-    elTemp.classList.add("saut");
+    relancer(elHeure, arriere);
+    relancer(elTemp, arriere);
   }
 
   for (let k = 0; k < colonnes.length; k++) {
@@ -965,16 +1068,18 @@ function depuisPointeur(e) {
 }
 
 let actif = false;
-elFrise.addEventListener("touchstart", function (e) {
-  actif = true; depuisPointeur(e); e.preventDefault();
-}, { passive: false });
+function ouvrir(e) { actif = true; elPage.classList.add("scrute"); depuisPointeur(e); }
+function fermer() { actif = false; elPage.classList.remove("scrute"); }
+
+elFrise.addEventListener("touchstart", function (e) { ouvrir(e); e.preventDefault(); }, { passive: false });
 elFrise.addEventListener("touchmove", function (e) {
   if (actif) { depuisPointeur(e); e.preventDefault(); }
 }, { passive: false });
-elFrise.addEventListener("touchend", function () { actif = false; });
-elFrise.addEventListener("mousedown", function (e) { actif = true; depuisPointeur(e); });
+elFrise.addEventListener("touchend", fermer);
+elFrise.addEventListener("touchcancel", fermer);
+elFrise.addEventListener("mousedown", ouvrir);
 window.addEventListener("mousemove", function (e) { if (actif) depuisPointeur(e); });
-window.addEventListener("mouseup", function () { actif = false; });
+window.addEventListener("mouseup", fermer);
 window.addEventListener("resize", function () {
   const i = indexActuel < 0 ? 0 : indexActuel; indexActuel = -1; afficher(i);
 });

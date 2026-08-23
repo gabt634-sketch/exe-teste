@@ -10,10 +10,14 @@ Widget météo pour l'écran d'accueil de l'iPhone, né du mélange de trois ré
   dans la vue plein écran : 520 particules sur orbites képlériennes, traînées de
   lumière, effet de phare sur le côté qui s'approche.
 
-Un appui sur le widget ouvre cette **vue plein écran interactive** : on fait glisser
-le doigt sur la frise et la température se met à jour heure par heure, sur 48 heures.
-Le disque réagit à la météo de l'heure visée — vif et rapide par ciel dégagé, lent et
-diffus dans le brouillard, avec des éclairs pendant l'orage.
+Un appui sur le widget ouvre une **vue plein écran interactive** : on fait glisser le
+doigt sur la frise et l'heure visée s'affiche en très grand, la température juste
+dessous avec les conditions. Pendant le glissement la lecture grossit, le reste
+s'efface, et les chiffres défilent comme un compteur, dans le sens du doigt.
+
+**Le fond réagit au temps**, dans le widget comme dans la vue : le disque d'accrétion
+est vif et rapide par ciel dégagé, épais et diffus dans le brouillard, criblé de
+gouttes sous la pluie, traversé d'un éclair pendant l'orage, et assombri la nuit.
 
 Données : [Open-Meteo](https://open-meteo.com) — gratuit, sans clé API.
 
@@ -71,22 +75,22 @@ Le glissement vit donc dans la vue plein écran, à un appui de distance : le wi
 affiche l'instant présent, l'appui ouvre la frise des 48 heures. C'est la seule voie
 possible sans passer par Xcode et une vraie application.
 
-## Les sept ambiances du disque
+## Les sept temps
 
-L'aspect du disque est piloté par la météo de l'heure affichée : vitesse de rotation,
-densité de matière, éclat, longueur des traînées et épaisseur du trait.
+Le même vocabulaire pilote le fond du widget, fixe, et le disque animé de la vue.
 
-| Ambiance | Allure |
-|---|---|
-| Ciel dégagé | Rapide, traînées longues, éclat maximal |
-| Voilé | Légèrement ralenti et adouci |
-| Couvert | Matière plus rare, lumière assourdie |
-| Brouillard | Très lent, trait épais et diffus |
-| Pluie | Traînées longues, éclat retenu |
-| Neige | Presque immobile, matière dense et douce |
-| Orage | Rotation vive, traînées maximales, éclairs |
+| Temps | Fond du widget | Disque animé |
+|---|---|---|
+| Ciel dégagé | Traînées longues et vives, anneau net | Rapide, éclat maximal |
+| Voilé | Légèrement adouci | Un peu ralenti |
+| Couvert | Matière plus rare, trait épaissi | Lumière assourdie |
+| Brouillard | Traits courts et très épais, halo étalé | Très lent et diffus |
+| Pluie | Gouttes fines devant le disque | Traînées longues, éclat retenu |
+| Neige | Flocons épars, traits doux | Presque immobile |
+| Orage | Un éclair jusque dans le disque | Rotation vive, flashs |
 
-La nuit assombrit l'ensemble d'environ 45 %.
+La nuit assombrit chaque temps d'environ 42 %. À météo égale, le fond du widget est
+toujours dessiné à l'identique : il ne scintille pas entre deux rafraîchissements.
 
 ## Bon à savoir
 
