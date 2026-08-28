@@ -317,45 +317,18 @@ function fondTrouNoir(largeur, hauteur, famille, estJour) {
   const rayon = largeur * 0.22
   const suivant = alea(20260823 + GRAINES[clef] * 7919)
 
-  // ── L'objet du ciel, posé au-dessus du trou noir ──
-  // Faute de dégradés dans DrawContext, le halo est fait d'anneaux successifs.
+  // ── La lueur du temps, dans l'angle ──
+  // Le widget porte déjà son icône en premier plan : un second soleil dessiné
+  // au fond ferait doublon, et se poserait en plein sur le texte. On ne garde
+  // donc qu'une ambiance colorée, faite d'anneaux successifs faute de dégradés.
   if (f.ciel) {
-    const sx = largeur * 0.80
-    const sy = hauteur * 0.19
-    const sr = largeur * 0.058
-    for (let i = 14; i >= 1; i--) {
-      const rr = sr * (1 + i * 0.20)
-      dc.setFillColor(new Color(teinteOmbre, 0.020 * gain))
+    const sx = largeur * 0.82
+    const sy = hauteur * 0.13
+    const sr = largeur * 0.10
+    for (let i = 16; i >= 1; i--) {
+      const rr = sr * (0.5 + i * 0.23)
+      dc.setFillColor(new Color(i > 10 ? teinteOmbre : teinteCiel, 0.016 * gain))
       dc.fillEllipse(new Rect(sx - rr, sy - rr, rr * 2, rr * 2))
-    }
-    if (f.ciel === "soleil" || f.ciel === "lune") {
-      dc.setFillColor(new Color(teinteCiel, 0.85 * gain))
-      dc.fillEllipse(new Rect(sx - sr, sy - sr, sr * 2, sr * 2))
-      if (f.ciel === "lune") {           // on recreuse le croissant en noir
-        dc.setFillColor(new Color("#000000"))
-        dc.fillEllipse(new Rect(sx - sr * 0.5, sy - sr * 1.28, sr * 1.84, sr * 1.84))
-      }
-    } else {
-      const nom = f.chute === "neige" ? "neige"
-        : clef === "orage" ? "orage"
-        : f.chute === "pluie" ? "pluie" : "nuage"
-      const corps = versHex(melange(f.h, [255, 255, 255], 0.22))
-      for (const cl of BANCS[nom]) {
-        const nx = largeur * cl[0], ny = hauteur * cl[1], ech = sr * cl[2]
-        const degage = 0.17 + 0.83 * Math.max(0, Math.min(1, (cl[0] - 0.48) / 0.28))
-        const al = cl[3] * degage * 0.62 * gain
-        if (al < 0.01) continue
-        const bulles = cl[2] > 0.9
-          ? [[-1.10, 0.28, 0.58], [-0.55, 0.00, 0.88], [0.05, -0.20, 1.02],
-             [0.72, 0.06, 0.84], [1.35, 0.30, 0.56]]
-          : [[-0.70, 0.20, 0.62], [0.00, -0.12, 0.94], [0.78, 0.18, 0.66]]
-        dc.setFillColor(new Color(corps, al))
-        for (let i = 0; i < bulles.length; i++) {
-          const br = ech * bulles[i][2]
-          dc.fillEllipse(new Rect(nx + bulles[i][0] * ech - br, ny + bulles[i][1] * ech - br,
-                                  br * 2, br * 2))
-        }
-      }
     }
   }
 
@@ -398,8 +371,11 @@ function fondTrouNoir(largeur, hauteur, famille, estJour) {
   if (f.chute) {
     const combien = f.chute === "brume" ? 26 : 52
     for (let n = 0; n < combien; n++) {
+      // La météo appartient à la scène du disque, en bas : plus haut elle
+      // viendrait strier l'heure, la courbe et la bande des jours.
+      const hautChute = hauteur * 0.45
       const x = (suivant() * 1.3 - 0.15) * largeur
-      const y = suivant() * (cy - rayon * 0.5)
+      const y = hautChute + suivant() * Math.max(1, cy - rayon * 0.6 - hautChute)
       const dx = cx - x, dy = cy - y
       const dist = Math.sqrt(dx * dx + dy * dy) || 1
       const prise = Math.max(0, Math.min(1, 1 - (dist - rayon) / (rayon * 3)))
@@ -448,15 +424,25 @@ function fondTrouNoir(largeur, hauteur, famille, estJour) {
     // Le trait qui descend du nuage.
     dc.setStrokeColor(new Color(teinteChute, 0.55))
     dc.setLineWidth(1.5)
-    dc.addPath(brise(largeur * 0.80, hauteur * 0.30, cx, cy - rayon * 0.9, largeur * 0.06, 7))
+    dc.addPath(brise(largeur * 0.82, hauteur * 0.52, cx, cy - rayon * 0.9, largeur * 0.05, 7))
     dc.strokePath()
 
-    // Les jets qui jaillissent de l'horizon.
-    for (let i = 0; i < 3; i++) {
-      const a = Math.PI + (0.15 + suivant() * 0.7) * Math.PI
+    // Les jets qui jaillissent de l'horizon. Un widget large et plat n'a pas
+    // la hauteur pour les accueillir sans traverser la bande des jours.
+    const assezHaut = hauteur / largeur > 0.8
+    for (let i = 0; assezHaut && i < 3; i++) {
+      // On écarte la verticale : un jet qui monte droit traverserait la
+      // bande des jours et la courbe.
+      const cote = suivant() < 0.5 ? 0.10 : 0.62
+      const a = Math.PI + (cote + suivant() * 0.28) * Math.PI
       const x0 = cx + Math.cos(a) * rayon * 1.02
       const y0 = cy + Math.sin(a) * rayon * 1.02
-      const portee = rayon * (1.2 + suivant() * 1.5)
+      // Un jet ne doit pas dépasser la zone basse : on raccourcit sa portée
+      // plutôt que de le laisser traverser la bande des jours.
+      const limite = hauteur * 0.62
+      const monte = -Math.sin(a)
+      let portee = rayon * (0.6 + suivant() * 0.9)
+      if (monte > 0.05) portee = Math.min(portee, Math.max(0, y0 - limite) / (0.85 * monte))
       dc.setStrokeColor(new Color(teinteChute, 0.30 + suivant() * 0.35))
       dc.setLineWidth(1.2)
       dc.addPath(brise(x0, y0, x0 + Math.cos(a) * portee, y0 + Math.sin(a) * portee * 0.85,
@@ -522,7 +508,7 @@ function grapheHoraire(heures, largeur, hauteur) {
   ligne.move(points[0])
   for (let i = 1; i < points.length; i++) ligne.addLine(points[i])
   dc.setStrokeColor(new Color(BLANC, 0.92))
-  dc.setLineWidth(1.6)
+  dc.setLineWidth(1.3)
   dc.addPath(ligne)
   dc.strokePath()
 
@@ -539,8 +525,13 @@ function grapheHoraire(heures, largeur, hauteur) {
   dc.drawTextInRect(Math.round(tMax) + "°",
     new Rect(Math.min(Math.max(x(iMax) - 22, 0), largeur - 44), y(tMax) - 15, 44, 13))
   dc.setTextColor(new Color(BLANC, 0.55))
+  // Sous le point s'il reste la place, au-dessus sinon : sinon l'étiquette
+  // vient s'écraser sur la rangée des heures.
+  const yMin = y(tMin)
+  const placeDessous = yMin + 15 < margeHaute + hCourbe
   dc.drawTextInRect(Math.round(tMin) + "°",
-    new Rect(Math.min(Math.max(x(iMin) - 22, 0), largeur - 44), Math.min(y(tMin) + 2, margeHaute + hCourbe - 2), 44, 13))
+    new Rect(Math.min(Math.max(x(iMin) - 22, 0), largeur - 44),
+             placeDessous ? yMin + 2 : yMin - 15, 44, 13))
 
   // Heures, alignées sur les points de la courbe.
   dc.setFont(Font.mediumMonospacedSystemFont(9))
@@ -709,7 +700,7 @@ function vueGrande(w, d) {
 
   w.addSpacer(10)
 
-  const graphe = w.addImage(grapheHoraire(d.heures, 620, 190))
+  const graphe = w.addImage(grapheHoraire(d.heures, 310, 95))
   graphe.imageSize = new Size(310, 95)
 
   w.addSpacer(8)

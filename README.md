@@ -128,6 +128,14 @@ jours ni sur la frise.
 La nuit assombrit chaque temps d'environ 42 %. À météo égale, le fond du widget est
 toujours dessiné à l'identique : il ne scintille pas entre deux rafraîchissements.
 
+## Le fond du widget, en pratique
+
+Le widget porte déjà son icône météo en premier plan : son fond ne dessine donc
+**pas** de second soleil, seulement une lueur colorée dans l'angle. Ce qui tombe
+reste cantonné à la moitié basse, autour du disque, pour ne pas strier l'heure ni
+la bande des jours. Et les jets de l'orage ne sont tracés que sur les formats assez
+hauts — le format moyen, large et plat, n'a pas la place de les accueillir.
+
 ## Bon à savoir
 
 - **Hors ligne**, le widget affiche le dernier relevé connu avec la mention
