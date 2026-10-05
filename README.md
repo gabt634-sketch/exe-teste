@@ -7,7 +7,7 @@ Widget météo pour l'écran d'accueil de l'iPhone, né du mélange de trois ré
 - **!Boring Weather** — la bande des jours en bas du widget : libellé, icône,
   maximum en gras, minimum estompé ;
 - **le site Active Theory de la vidéo** — la matière générative en mouvement, reprise
-  dans la vue plein écran : 520 particules sur orbites képlériennes, traînées de
+  dans la vue plein écran : 440 particules sur orbites képlériennes, traînées de
   lumière, effet de phare sur le côté qui s'approche.
 
 Un appui sur le widget ouvre une **vue plein écran interactive** : on fait glisser le
@@ -78,7 +78,8 @@ Dans le bloc `CONFIG` en haut du fichier :
 | Réglage | Rôle | Défaut |
 |---|---|---|
 | `unites` | `"metrique"` (°C, km/h) ou `"imperial"` (°F, mph) | `"metrique"` |
-| `villeParDefaut` | Ville de repli si le GPS est indisponible | `"Paris"` |
+| `villeFixe` | Ville imposée à tous les widgets. `""` = suivre le GPS | `"Avignon"` |
+| `villeParDefaut` | Ville de repli si le GPS est indisponible | `"Avignon"` |
 | `minutesAvantRafraichissement` | Fréquence de mise à jour souhaitée | `30` |
 | `joursAffiches` | Colonnes de la bande des jours (widget grand) | `8` |
 | `heuresGraphe` | Portée de la courbe du widget grand | `24` |
