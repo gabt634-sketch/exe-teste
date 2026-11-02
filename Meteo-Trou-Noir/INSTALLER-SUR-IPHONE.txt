@@ -1,0 +1,23 @@
+INSTALLER LE WIDGET METEO SUR IPHONE
+====================================
+
+Contenu du dossier
+  Meteo.js        le widget (le code a coller / importer dans Scriptable)
+  LISEZ-MOI.md    la documentation complete
+  Ce fichier      les etapes ci-dessous
+
+Etapes
+  1. Installe l'app gratuite "Scriptable" depuis l'App Store.
+  2. Dezippe ce dossier dans l'app Fichiers.
+  3. Deux facons de mettre Meteo.js dans Scriptable :
+       A. Copie Meteo.js dans  iCloud Drive > Scriptable
+          (il apparait tout seul dans l'app), ou
+       B. Ouvre Meteo.js (apercu), copie tout le texte, puis dans
+          Scriptable : "+" > colle > renomme le script "Meteo".
+  4. Lance le script une fois (bouton Play) et accepte la localisation.
+  5. Ecran d'accueil : appui long > "+" > Scriptable > taille > Ajouter.
+  6. Appui long sur le widget > "Modifier le widget" :
+       Script           : Meteo
+       When Interacting : Run Script   <- indispensable
+
+La ville est reglee sur Avignon (variable villeFixe en haut de Meteo.js).
